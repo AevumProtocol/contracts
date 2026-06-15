@@ -8,4 +8,7 @@ module.exports = {
       accounts: ["REDACTED_PRIVATE_KEY"],
     },
   },
+  etherscan: {
+    apiKey: "3FTNB5PNSSU84I95T152YIRPFR66FN4A98",
+  },
 };
