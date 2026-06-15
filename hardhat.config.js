@@ -8,4 +8,7 @@ module.exports = {
       accounts: ["0xe380971a27aafc78bb6b218d9d5283d58a7a6e1f70190ec4f6effa76754e5860"],
     },
   },
+  etherscan: {
+    apiKey: "3FTNB5PNSSU84I95T152YIRPFR66FN4A98",
+  },
 };
