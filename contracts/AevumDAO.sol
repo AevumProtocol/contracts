@@ -12,10 +12,11 @@ contract AevumDAO {
 
     uint256 public proposalCount;
     uint256 public votingPeriod = 7 days;
+    uint256 public timelockDelay = 48 hours;
     uint256 public quorumVotes;
-    uint256 public constant MIN_PROPOSAL_TOKENS = 1000 * 10**18;
+    uint256 public constant MIN_PROPOSAL_TOKENS = 1_000_000 * 10**18;
 
-    enum ProposalState { Active, Passed, Failed, Executed, Cancelled }
+    enum ProposalState { Active, Passed, Failed, Executed, Cancelled, Queued }
 
     struct Proposal {
         uint256 id;
@@ -28,12 +29,14 @@ contract AevumDAO {
         uint256 againstVotes;
         uint256 startTime;
         uint256 endTime;
+        uint256 executionTime;
+        uint256 snapshotBlock;
         ProposalState state;
     }
 
     mapping(uint256 => Proposal) public proposals;
     mapping(uint256 => mapping(address => bool)) public hasVoted;
-    mapping(uint256 => mapping(address => bool)) public votedFor;
+    mapping(uint256 => mapping(address => uint256)) public snapshotBalances;
 
     event ProposalCreated(
         uint256 indexed proposalId,
@@ -47,10 +50,12 @@ contract AevumDAO {
         bool support,
         uint256 weight
     );
+    event ProposalQueued(uint256 indexed proposalId, uint256 executionTime);
     event ProposalExecuted(uint256 indexed proposalId);
     event ProposalCancelled(uint256 indexed proposalId);
     event QuorumUpdated(uint256 newQuorum);
     event VotingPeriodUpdated(uint256 newPeriod);
+    event TimelockDelayUpdated(uint256 newDelay);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -72,11 +77,12 @@ contract AevumDAO {
     ) external returns (uint256) {
         require(
             aevToken.balanceOf(msg.sender) >= MIN_PROPOSAL_TOKENS,
-            "Insufficient AEV to propose"
+            "Need 1,000,000 AEV to propose"
         );
         require(target != address(0), "Invalid target");
 
         proposalCount++;
+
         proposals[proposalCount] = Proposal({
             id: proposalCount,
             proposer: msg.sender,
@@ -88,8 +94,13 @@ contract AevumDAO {
             againstVotes: 0,
             startTime: block.timestamp,
             endTime: block.timestamp + votingPeriod,
+            executionTime: 0,
+            snapshotBlock: block.number,
             state: ProposalState.Active
         });
+
+        // snapshot proposer balance
+        snapshotBalances[proposalCount][msg.sender] = aevToken.balanceOf(msg.sender);
 
         emit ProposalCreated(proposalCount, msg.sender, title, target);
         return proposalCount;
@@ -101,11 +112,16 @@ contract AevumDAO {
         require(block.timestamp <= proposal.endTime, "Voting period ended");
         require(!hasVoted[proposalId][msg.sender], "Already voted");
 
-        uint256 weight = aevToken.balanceOf(msg.sender);
+        // use snapshot balance if available, otherwise current balance
+        uint256 weight = snapshotBalances[proposalId][msg.sender] > 0
+            ? snapshotBalances[proposalId][msg.sender]
+            : aevToken.balanceOf(msg.sender);
+
         require(weight > 0, "No voting power");
 
+        // snapshot balance at vote time to prevent double voting with transfers
+        snapshotBalances[proposalId][msg.sender] = weight;
         hasVoted[proposalId][msg.sender] = true;
-        votedFor[proposalId][msg.sender] = support;
 
         if (support) {
             proposal.forVotes += weight;
@@ -124,15 +140,21 @@ contract AevumDAO {
         uint256 totalVotes = proposal.forVotes + proposal.againstVotes;
 
         if (totalVotes >= quorumVotes && proposal.forVotes > proposal.againstVotes) {
-            proposal.state = ProposalState.Passed;
+            proposal.state = ProposalState.Queued;
+            proposal.executionTime = block.timestamp + timelockDelay;
+            emit ProposalQueued(proposalId, proposal.executionTime);
         } else {
             proposal.state = ProposalState.Failed;
         }
     }
 
-    function execute(uint256 proposalId) external onlyOwner {
+    function execute(uint256 proposalId) external {
         Proposal storage proposal = proposals[proposalId];
-        require(proposal.state == ProposalState.Passed, "Proposal not passed");
+        require(proposal.state == ProposalState.Queued, "Proposal not queued");
+        require(
+            block.timestamp >= proposal.executionTime,
+            "Timelock delay not met"
+        );
 
         proposal.state = ProposalState.Executed;
 
@@ -148,7 +170,11 @@ contract AevumDAO {
             msg.sender == proposal.proposer || msg.sender == owner,
             "Not proposer or owner"
         );
-        require(proposal.state == ProposalState.Active, "Proposal not active");
+        require(
+            proposal.state == ProposalState.Active ||
+            proposal.state == ProposalState.Queued,
+            "Cannot cancel"
+        );
         proposal.state = ProposalState.Cancelled;
         emit ProposalCancelled(proposalId);
     }
@@ -162,6 +188,12 @@ contract AevumDAO {
         require(newPeriod >= 1 days, "Period too short");
         votingPeriod = newPeriod;
         emit VotingPeriodUpdated(newPeriod);
+    }
+
+    function setTimelockDelay(uint256 newDelay) external onlyOwner {
+        require(newDelay >= 24 hours, "Delay too short");
+        timelockDelay = newDelay;
+        emit TimelockDelayUpdated(newDelay);
     }
 
     function getProposalState(uint256 proposalId) external view returns (ProposalState) {

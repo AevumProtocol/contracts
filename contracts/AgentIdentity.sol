@@ -33,15 +33,25 @@ contract AgentIdentity {
     mapping(address => uint256) private _ownerToAgentId;
 
     address public owner;
+    address public reputationController;
 
     event AgentRegistered(uint256 indexed agentId, address indexed agentOwner, bytes32 strategyHash);
     event StrategyUpdated(uint256 indexed agentId, bytes32 newHash);
     event ReputationUpdated(uint256 indexed agentId, uint256 newScore);
     event CertificateAdded(uint256 indexed agentId, bytes32 certHash);
+    event ControllerUpdated(address indexed newController);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not contract owner");
+        _;
+    }
+
+    modifier onlyAuthorizedController() {
+        require(
+            msg.sender == reputationController,
+            "Not authorized controller"
+        );
         _;
     }
 
@@ -58,6 +68,12 @@ contract AgentIdentity {
     constructor() {
         owner = msg.sender;
         _agentCounter = 1;
+    }
+
+    function setReputationController(address controller) external onlyOwner {
+        require(controller != address(0), "Invalid address");
+        reputationController = controller;
+        emit ControllerUpdated(controller);
     }
 
     function registerAgent(
@@ -107,7 +123,7 @@ contract AgentIdentity {
     }
 
     function updateReputation(uint256 agentId, uint256 newScore)
-        external onlyOwner agentExists(agentId)
+        external onlyAuthorizedController agentExists(agentId)
     {
         require(newScore <= 1000, "Score exceeds max");
         _agents[agentId].reputationScore = newScore;
