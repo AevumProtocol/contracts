@@ -13,7 +13,8 @@ contract AgentMarketplace {
 
     uint256 public listingCount;
     uint256 public jobCount;
-    uint256 public platformFeeBps = 250; // 2.5%
+    uint256 public platformFeeBps = 250;
+    uint256 public maxDisputeWindow = 7 days;
 
     enum JobStatus { Open, InProgress, Completed, Disputed, Cancelled }
 
@@ -34,6 +35,7 @@ contract AgentMarketplace {
         uint256 amount;
         JobStatus status;
         uint256 createdAt;
+        uint256 disputedAt;
     }
 
     mapping(uint256 => Listing) public listings;
@@ -48,6 +50,8 @@ contract AgentMarketplace {
     event JobDisputed(uint256 indexed jobId, address client);
     event JobCancelled(uint256 indexed jobId);
     event DisputeResolved(uint256 indexed jobId, address winner, uint256 amount);
+    event DisputeExpired(uint256 indexed jobId, address agent, uint256 amount);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -104,7 +108,8 @@ contract AgentMarketplace {
             agent: listing.agent,
             amount: msg.value,
             status: JobStatus.InProgress,
-            createdAt: block.timestamp
+            createdAt: block.timestamp,
+            disputedAt: 0
         });
 
         clientJobs[msg.sender].push(jobCount);
@@ -136,6 +141,7 @@ contract AgentMarketplace {
         require(msg.sender == job.client, "Only client can dispute");
         require(job.status == JobStatus.InProgress, "Job not in progress");
         job.status = JobStatus.Disputed;
+        job.disputedAt = block.timestamp;
         emit JobDisputed(jobId, msg.sender);
     }
 
@@ -150,6 +156,23 @@ contract AgentMarketplace {
         require(paid, "Payment failed");
 
         emit DisputeResolved(jobId, winner, job.amount);
+    }
+
+    function claimExpiredDispute(uint256 jobId) external {
+        Job storage job = jobs[jobId];
+        require(job.status == JobStatus.Disputed, "Job not disputed");
+        require(msg.sender == job.agent, "Only agent can claim");
+        require(
+            block.timestamp >= job.disputedAt + maxDisputeWindow,
+            "Dispute window not expired"
+        );
+
+        job.status = JobStatus.Completed;
+
+        (bool paid, ) = payable(job.agent).call{value: job.amount}("");
+        require(paid, "Payment failed");
+
+        emit DisputeExpired(jobId, job.agent, job.amount);
     }
 
     function cancelJob(uint256 jobId) external {
@@ -174,11 +197,21 @@ contract AgentMarketplace {
         platformFeeBps = newFeeBps;
     }
 
+    function setMaxDisputeWindow(uint256 newWindow) external onlyOwner {
+        maxDisputeWindow = newWindow;
+    }
+
     function getAgentListings(address agent) external view returns (uint256[] memory) {
         return agentListings[agent];
     }
 
     function getClientJobs(address client) external view returns (uint256[] memory) {
         return clientJobs[client];
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
 }

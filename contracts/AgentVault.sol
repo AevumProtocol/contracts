@@ -11,15 +11,14 @@ contract AgentVault {
     address public owner;
     IReputationOracle public oracle;
 
-    uint256 public defaultWithdrawLimit = 0.01 ether;
+    uint256 public defaultWithdrawLimit;
     uint256 public minReputationScore = 100;
+    uint256 public cooldownPeriod = 1 days;
 
     mapping(address => uint256) public agentWithdrawLimits;
     mapping(address => uint256) public agentTotalWithdrawn;
     mapping(address => uint256) public agentLastWithdraw;
     mapping(address => bool) public blacklisted;
-
-    uint256 public cooldownPeriod = 1 days;
 
     event Deposited(address indexed sender, uint256 amount);
     event Withdrawn(address indexed agent, uint256 amount);
@@ -27,6 +26,8 @@ contract AgentVault {
     event AgentUnblacklisted(address indexed agent);
     event WithdrawLimitSet(address indexed agent, uint256 limit);
     event MinScoreUpdated(uint256 newScore);
+    event DefaultWithdrawLimitUpdated(uint256 newLimit);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -38,9 +39,10 @@ contract AgentVault {
         _;
     }
 
-    constructor(address _oracleAddress) {
+    constructor(address _oracleAddress, uint256 _defaultWithdrawLimit) {
         owner = msg.sender;
         oracle = IReputationOracle(_oracleAddress);
+        defaultWithdrawLimit = _defaultWithdrawLimit;
     }
 
     receive() external payable {
@@ -84,6 +86,11 @@ contract AgentVault {
         emit WithdrawLimitSet(agent, limit);
     }
 
+    function setDefaultWithdrawLimit(uint256 newLimit) external onlyOwner {
+        defaultWithdrawLimit = newLimit;
+        emit DefaultWithdrawLimitUpdated(newLimit);
+    }
+
     function setMinReputationScore(uint256 newScore) external onlyOwner {
         require(newScore <= 1000, "Score exceeds max");
         minReputationScore = newScore;
@@ -120,5 +127,11 @@ contract AgentVault {
             agentLastWithdraw[agent],
             blacklisted[agent]
         );
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
 }

@@ -45,6 +45,7 @@ contract ReputationOracle {
     event AgentApproved(address indexed protocol, uint256 indexed agentId, uint256 score);
     event AgentDenied(address indexed protocol, uint256 indexed agentId, uint256 score);
     event MinScoreUpdated(address indexed protocol, uint256 newScore);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -101,5 +102,11 @@ contract ReputationOracle {
     function setDefaultMinScore(uint256 newScore) external onlyOwner {
         require(newScore <= 1000, "Score exceeds max");
         defaultMinScore = newScore;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
 }
