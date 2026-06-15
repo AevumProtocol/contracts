@@ -38,6 +38,7 @@ contract AgentIdentity {
     event StrategyUpdated(uint256 indexed agentId, bytes32 newHash);
     event ReputationUpdated(uint256 indexed agentId, uint256 newScore);
     event CertificateAdded(uint256 indexed agentId, bytes32 certHash);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not contract owner");
@@ -119,6 +120,13 @@ contract AgentIdentity {
         _agents[agentId].policy = policy;
     }
 
+    function deactivateAgent(uint256 agentId)
+        external agentExists(agentId) onlyAgentOwner(agentId)
+    {
+        _agents[agentId].isActive = false;
+        _ownerToAgentId[msg.sender] = 0;
+    }
+
     function getAgent(uint256 agentId)
         external view agentExists(agentId)
         returns (AgentRecord memory)
@@ -135,5 +143,11 @@ contract AgentIdentity {
 
     function totalAgents() external view returns (uint256) {
         return _agentCounter - 1;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
 }

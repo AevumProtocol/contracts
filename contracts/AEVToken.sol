@@ -18,26 +18,32 @@ contract AEVToken is IERC20 {
     string public symbol = "AEV";
     uint8 public decimals = 18;
 
-    uint256 public constant MAX_SUPPLY = 1_000_000_000 * 10**18; // 1 billion hard cap
-    uint256 public constant BURN_BPS = 5000; // 50% of fees burned
+    uint256 public constant MAX_SUPPLY = 1_000_000_000 * 10**18;
+    uint256 public constant BURN_BPS = 5000;
 
     uint256 private _totalSupply;
     uint256 public totalBurned;
 
     address public owner;
     address public feeCollector;
+    address public ecosystemWallet;
+    address public daoTreasuryWallet;
+    address public communityWallet;
+    address public teamWallet;
+    address public liquidityWallet;
+    address public investorWallet;
 
     bool public transfersEnabled = false;
+    uint256 public feeBps = 100;
 
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
     mapping(address => bool) public isExcludedFromFee;
 
-    uint256 public feeBps = 100; // 1% transfer fee
-
     event Burned(address indexed from, uint256 amount);
     event TransfersEnabled();
     event FeeCollectorUpdated(address indexed newCollector);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -49,23 +55,39 @@ contract AEVToken is IERC20 {
         _;
     }
 
-    constructor() {
+    constructor(
+        address _ecosystemWallet,
+        address _daoTreasuryWallet,
+        address _communityWallet,
+        address _teamWallet,
+        address _liquidityWallet,
+        address _investorWallet
+    ) {
         owner = msg.sender;
         feeCollector = msg.sender;
-        isExcludedFromFee[msg.sender] = true;
 
-        // Mint allocation
-        uint256 communityAlloc    = MAX_SUPPLY * 30 / 100; // 30% community
-        uint256 ecosystemAlloc    = MAX_SUPPLY * 25 / 100; // 25% ecosystem
-        uint256 teamAlloc         = MAX_SUPPLY * 15 / 100; // 15% team
-        uint256 investorAlloc     = MAX_SUPPLY * 20 / 100; // 20% investors
-        uint256 reserveAlloc      = MAX_SUPPLY * 10 / 100; // 10% reserve
+        ecosystemWallet    = _ecosystemWallet;
+        daoTreasuryWallet  = _daoTreasuryWallet;
+        communityWallet    = _communityWallet;
+        teamWallet         = _teamWallet;
+        liquidityWallet    = _liquidityWallet;
+        investorWallet     = _investorWallet;
 
-        _mint(msg.sender, communityAlloc);
-        _mint(msg.sender, ecosystemAlloc);
-        _mint(msg.sender, teamAlloc);
-        _mint(msg.sender, investorAlloc);
-        _mint(msg.sender, reserveAlloc);
+        isExcludedFromFee[msg.sender]        = true;
+        isExcludedFromFee[_ecosystemWallet]  = true;
+        isExcludedFromFee[_daoTreasuryWallet]= true;
+        isExcludedFromFee[_communityWallet]  = true;
+        isExcludedFromFee[_teamWallet]       = true;
+        isExcludedFromFee[_liquidityWallet]  = true;
+        isExcludedFromFee[_investorWallet]   = true;
+
+        // Mint per whitepaper allocations to separate wallets
+        _mint(_ecosystemWallet,   MAX_SUPPLY * 30 / 100); // 30% ecosystem
+        _mint(_daoTreasuryWallet, MAX_SUPPLY * 20 / 100); // 20% DAO treasury
+        _mint(_communityWallet,   MAX_SUPPLY * 15 / 100); // 15% community airdrop
+        _mint(_teamWallet,        MAX_SUPPLY * 15 / 100); // 15% team
+        _mint(_liquidityWallet,   MAX_SUPPLY * 10 / 100); // 10% liquidity
+        _mint(_investorWallet,    MAX_SUPPLY * 10 / 100); // 10% strategic investors
     }
 
     function totalSupply() external view override returns (uint256) {
@@ -132,6 +154,12 @@ contract AEVToken is IERC20 {
     function setFeeBps(uint256 newFeeBps) external onlyOwner {
         require(newFeeBps <= 500, "Fee too high");
         feeBps = newFeeBps;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
 
     function _transferWithFee(address from, address to, uint256 amount) internal {
