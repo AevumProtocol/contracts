@@ -13,6 +13,7 @@ contract ReputationController {
 
     uint256 public constant MAX_SCORE = 1000;
     uint256 public constant MIN_APPROVALS = 2;
+    uint256 public constant MIN_ORACLES = 2;
 
     mapping(address => bool) public authorizedOracles;
     uint256 public oracleCount;
@@ -45,11 +46,14 @@ contract ReputationController {
         _;
     }
 
+    modifier minimumOracles() {
+        require(oracleCount >= MIN_ORACLES, "Minimum 2 oracles required");
+        _;
+    }
+
     constructor(address _agentIdentityAddress) {
         owner = msg.sender;
         agentIdentity = IAgentIdentity(_agentIdentityAddress);
-        authorizedOracles[msg.sender] = true;
-        oracleCount = 1;
     }
 
     function addOracle(address oracle) external onlyOwner {
@@ -62,7 +66,7 @@ contract ReputationController {
 
     function removeOracle(address oracle) external onlyOwner {
         require(authorizedOracles[oracle], "Not an oracle");
-        require(oracleCount > 1, "Cannot remove last oracle");
+        require(oracleCount > MIN_ORACLES, "Cannot drop below minimum oracles");
         authorizedOracles[oracle] = false;
         oracleCount--;
         emit OracleRemoved(oracle);
@@ -71,7 +75,7 @@ contract ReputationController {
     function proposeReputationUpdate(
         uint256 agentId,
         uint256 newScore
-    ) external onlyOracle returns (uint256) {
+    ) external onlyOracle minimumOracles returns (uint256) {
         require(newScore <= MAX_SCORE, "Score exceeds max");
 
         proposalCount++;
@@ -83,15 +87,10 @@ contract ReputationController {
         proposal.hasApproved[msg.sender] = true;
 
         emit ProposalCreated(proposalCount, agentId, newScore);
-
-        if (oracleCount == 1) {
-            _executeProposal(proposalCount);
-        }
-
         return proposalCount;
     }
 
-    function approveProposal(uint256 proposalId) external onlyOracle {
+    function approveProposal(uint256 proposalId) external onlyOracle minimumOracles {
         ReputationProposal storage proposal = proposals[proposalId];
         require(!proposal.executed, "Already executed");
         require(!proposal.hasApproved[msg.sender], "Already approved");
@@ -115,6 +114,10 @@ contract ReputationController {
 
     function hasApproved(uint256 proposalId, address oracle) external view returns (bool) {
         return proposals[proposalId].hasApproved[oracle];
+    }
+
+    function isActive() external view returns (bool) {
+        return oracleCount >= MIN_ORACLES;
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
