@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 interface IReputationOracle {
-    function isAgentAuthorized(address agentAddress, address protocol) external returns (bool);
+    function isAgentAuthorizedView(address agentAddress, address protocol) external view returns (bool);
     function checkScore(address agentAddress) external view returns (uint256);
 }
 
@@ -70,7 +70,7 @@ contract AgentMarketplace {
         uint256 priceWei
     ) external returns (uint256) {
         require(priceWei > 0, "Price must be greater than 0");
-        bool authorized = oracle.isAgentAuthorized(msg.sender, address(this));
+        bool authorized = oracle.isAgentAuthorizedView(msg.sender, address(this));
         require(authorized, "Agent not authorized by oracle");
         listingCount++;
         listings[listingCount] = Listing({
@@ -144,10 +144,14 @@ contract AgentMarketplace {
         Job storage job = jobs[jobId];
         require(job.status == JobStatus.Disputed, "Job not disputed");
         job.status = JobStatus.Completed;
+        uint256 fee = (job.amount * platformFeeBps) / 10000;
+        uint256 winnerPayment = job.amount - fee;
         address winner = favorAgent ? job.agent : job.client;
-        (bool paid, ) = payable(winner).call{value: job.amount}("");
+        (bool paid, ) = payable(winner).call{value: winnerPayment}("");
         require(paid, "Payment failed");
-        emit DisputeResolved(jobId, winner, job.amount);
+        (bool feePaid, ) = payable(owner).call{value: fee}("");
+        require(feePaid, "Fee payment failed");
+        emit DisputeResolved(jobId, winner, winnerPayment);
     }
 
     function claimExpiredDispute(uint256 jobId) external {
@@ -159,9 +163,13 @@ contract AgentMarketplace {
             "Dispute window not expired"
         );
         job.status = JobStatus.Completed;
-        (bool paid, ) = payable(job.agent).call{value: job.amount}("");
+        uint256 fee = (job.amount * platformFeeBps) / 10000;
+        uint256 agentPayment = job.amount - fee;
+        (bool paid, ) = payable(job.agent).call{value: agentPayment}("");
         require(paid, "Payment failed");
-        emit DisputeExpired(jobId, job.agent, job.amount);
+        (bool feePaid, ) = payable(owner).call{value: fee}("");
+        require(feePaid, "Fee payment failed");
+        emit DisputeExpired(jobId, job.agent, agentPayment);
     }
 
     function cancelJob(uint256 jobId) external {

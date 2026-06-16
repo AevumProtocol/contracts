@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 interface IReputationOracle {
-    function isAgentAuthorized(address agentAddress, address protocol) external returns (bool);
+    function isAgentAuthorizedView(address agentAddress, address protocol) external view returns (bool);
     function checkScore(address agentAddress) external view returns (uint256);
 }
 
@@ -12,7 +12,6 @@ contract AgentVault {
     IReputationOracle public oracle;
 
     uint256 public defaultWithdrawLimit;
-    uint256 public minReputationScore = 100;
     uint256 public cooldownPeriod = 1 days;
 
     mapping(address => uint256) public agentWithdrawLimits;
@@ -25,7 +24,6 @@ contract AgentVault {
     event AgentBlacklisted(address indexed agent);
     event AgentUnblacklisted(address indexed agent);
     event WithdrawLimitSet(address indexed agent, uint256 limit);
-    event MinScoreUpdated(uint256 newScore);
     event DefaultWithdrawLimitUpdated(uint256 newLimit);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -58,7 +56,7 @@ contract AgentVault {
         require(amount > 0, "Amount must be greater than 0");
         require(address(this).balance >= amount, "Insufficient vault balance");
 
-        bool authorized = oracle.isAgentAuthorized(msg.sender, address(this));
+        bool authorized = oracle.isAgentAuthorizedView(msg.sender, address(this));
         require(authorized, "Agent not authorized by oracle");
 
         uint256 limit = agentWithdrawLimits[msg.sender] > 0
@@ -66,7 +64,6 @@ contract AgentVault {
             : defaultWithdrawLimit;
 
         require(amount <= limit, "Exceeds withdraw limit");
-
         require(
             block.timestamp >= agentLastWithdraw[msg.sender] + cooldownPeriod,
             "Cooldown period not met"
@@ -91,12 +88,6 @@ contract AgentVault {
         emit DefaultWithdrawLimitUpdated(newLimit);
     }
 
-    function setMinReputationScore(uint256 newScore) external onlyOwner {
-        require(newScore <= 1000, "Score exceeds max");
-        minReputationScore = newScore;
-        emit MinScoreUpdated(newScore);
-    }
-
     function setCooldownPeriod(uint256 newPeriod) external onlyOwner {
         cooldownPeriod = newPeriod;
     }
@@ -113,6 +104,13 @@ contract AgentVault {
 
     function getVaultBalance() external view returns (uint256) {
         return address(this).balance;
+    }
+
+    function rescueETH() external onlyOwner {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No ETH to rescue");
+        (bool success, ) = payable(owner).call{value: balance}("");
+        require(success, "Rescue failed");
     }
 
     function getAgentStats(address agent) external view returns (
