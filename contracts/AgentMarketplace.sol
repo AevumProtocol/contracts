@@ -15,6 +15,7 @@ contract AgentMarketplace {
     uint256 public jobCount;
     uint256 public platformFeeBps = 250;
     uint256 public maxDisputeWindow = 7 days;
+    uint256 public minJobDuration = 1 hours;
 
     enum JobStatus { Open, InProgress, Completed, Disputed, Cancelled }
 
@@ -69,10 +70,8 @@ contract AgentMarketplace {
         uint256 priceWei
     ) external returns (uint256) {
         require(priceWei > 0, "Price must be greater than 0");
-
         bool authorized = oracle.isAgentAuthorized(msg.sender, address(this));
         require(authorized, "Agent not authorized by oracle");
-
         listingCount++;
         listings[listingCount] = Listing({
             id: listingCount,
@@ -82,7 +81,6 @@ contract AgentMarketplace {
             priceWei: priceWei,
             active: true
         });
-
         agentListings[msg.sender].push(listingCount);
         emit ListingCreated(listingCount, msg.sender, priceWei);
         return listingCount;
@@ -99,7 +97,6 @@ contract AgentMarketplace {
         require(listing.active, "Listing not active");
         require(msg.value == listing.priceWei, "Incorrect payment amount");
         require(msg.sender != listing.agent, "Cannot hire yourself");
-
         jobCount++;
         jobs[jobCount] = Job({
             id: jobCount,
@@ -111,7 +108,6 @@ contract AgentMarketplace {
             createdAt: block.timestamp,
             disputedAt: 0
         });
-
         clientJobs[msg.sender].push(jobCount);
         emit JobCreated(jobCount, listingId, msg.sender);
         return jobCount;
@@ -121,18 +117,17 @@ contract AgentMarketplace {
         Job storage job = jobs[jobId];
         require(msg.sender == job.client, "Only client can complete");
         require(job.status == JobStatus.InProgress, "Job not in progress");
-
+        require(
+            block.timestamp >= job.createdAt + minJobDuration,
+            "Job must run for minimum duration before completion"
+        );
         job.status = JobStatus.Completed;
-
         uint256 fee = (job.amount * platformFeeBps) / 10000;
         uint256 agentPayment = job.amount - fee;
-
         (bool agentPaid, ) = payable(job.agent).call{value: agentPayment}("");
         require(agentPaid, "Agent payment failed");
-
         (bool feePaid, ) = payable(owner).call{value: fee}("");
         require(feePaid, "Fee payment failed");
-
         emit JobCompleted(jobId, job.agent, agentPayment);
     }
 
@@ -148,13 +143,10 @@ contract AgentMarketplace {
     function resolveDispute(uint256 jobId, bool favorAgent) external onlyOwner {
         Job storage job = jobs[jobId];
         require(job.status == JobStatus.Disputed, "Job not disputed");
-
         job.status = JobStatus.Completed;
         address winner = favorAgent ? job.agent : job.client;
-
         (bool paid, ) = payable(winner).call{value: job.amount}("");
         require(paid, "Payment failed");
-
         emit DisputeResolved(jobId, winner, job.amount);
     }
 
@@ -166,12 +158,9 @@ contract AgentMarketplace {
             block.timestamp >= job.disputedAt + maxDisputeWindow,
             "Dispute window not expired"
         );
-
         job.status = JobStatus.Completed;
-
         (bool paid, ) = payable(job.agent).call{value: job.amount}("");
         require(paid, "Payment failed");
-
         emit DisputeExpired(jobId, job.agent, job.amount);
     }
 
@@ -183,12 +172,9 @@ contract AgentMarketplace {
             block.timestamp >= job.createdAt + 7 days,
             "Must wait 7 days before cancelling"
         );
-
         job.status = JobStatus.Cancelled;
-
         (bool refunded, ) = payable(job.client).call{value: job.amount}("");
         require(refunded, "Refund failed");
-
         emit JobCancelled(jobId);
     }
 
@@ -199,6 +185,10 @@ contract AgentMarketplace {
 
     function setMaxDisputeWindow(uint256 newWindow) external onlyOwner {
         maxDisputeWindow = newWindow;
+    }
+
+    function setMinJobDuration(uint256 newDuration) external onlyOwner {
+        minJobDuration = newDuration;
     }
 
     function getAgentListings(address agent) external view returns (uint256[] memory) {

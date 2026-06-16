@@ -92,6 +92,22 @@ contract ReputationOracle {
         }
     }
 
+    function isAgentAuthorizedView(address agentAddress, address protocol)
+        external view returns (bool)
+    {
+        uint256 agentId = agentIdentity.getAgentByAddress(agentAddress);
+        if (agentId == 0) return false;
+
+        IAgentIdentity.AgentRecord memory agent = agentIdentity.getAgent(agentId);
+        if (!agent.isActive) return false;
+
+        uint256 minScore = registeredProtocols[protocol]
+            ? protocolMinScores[protocol]
+            : defaultMinScore;
+
+        return agent.reputationScore >= minScore;
+    }
+
     function checkScore(address agentAddress) external view returns (uint256) {
         uint256 agentId = agentIdentity.getAgentByAddress(agentAddress);
         require(agentId != 0, "Agent not registered");
