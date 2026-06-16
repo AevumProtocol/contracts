@@ -13,6 +13,7 @@ contract AgentVault {
 
     uint256 public defaultWithdrawLimit;
     uint256 public cooldownPeriod = 1 days;
+    uint256 public totalDeposited;
 
     mapping(address => uint256) public agentWithdrawLimits;
     mapping(address => uint256) public agentTotalWithdrawn;
@@ -25,6 +26,7 @@ contract AgentVault {
     event AgentUnblacklisted(address indexed agent);
     event WithdrawLimitSet(address indexed agent, uint256 limit);
     event DefaultWithdrawLimitUpdated(uint256 newLimit);
+    event ETHRescued(address indexed owner, uint256 amount);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -44,11 +46,13 @@ contract AgentVault {
     }
 
     receive() external payable {
+        totalDeposited += msg.value;
         emit Deposited(msg.sender, msg.value);
     }
 
     function deposit() external payable {
         require(msg.value > 0, "Must send ETH");
+        totalDeposited += msg.value;
         emit Deposited(msg.sender, msg.value);
     }
 
@@ -71,11 +75,20 @@ contract AgentVault {
 
         agentLastWithdraw[msg.sender] = block.timestamp;
         agentTotalWithdrawn[msg.sender] += amount;
+        totalDeposited -= amount;
 
         (bool success, ) = payable(msg.sender).call{value: amount}("");
         require(success, "Transfer failed");
 
         emit Withdrawn(msg.sender, amount);
+    }
+
+    function rescueETH() external onlyOwner {
+        uint256 surplus = address(this).balance - totalDeposited;
+        require(surplus > 0, "No surplus ETH to rescue");
+        (bool success, ) = payable(owner).call{value: surplus}("");
+        require(success, "Rescue failed");
+        emit ETHRescued(owner, surplus);
     }
 
     function setWithdrawLimit(address agent, uint256 limit) external onlyOwner {
@@ -106,11 +119,8 @@ contract AgentVault {
         return address(this).balance;
     }
 
-    function rescueETH() external onlyOwner {
-        uint256 balance = address(this).balance;
-        require(balance > 0, "No ETH to rescue");
-        (bool success, ) = payable(owner).call{value: balance}("");
-        require(success, "Rescue failed");
+    function getSurplusETH() external view returns (uint256) {
+        return address(this).balance - totalDeposited;
     }
 
     function getAgentStats(address agent) external view returns (

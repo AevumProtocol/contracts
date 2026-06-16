@@ -15,6 +15,7 @@ contract AevumDAO {
     uint256 public timelockDelay = 48 hours;
     uint256 public quorumVotes;
     uint256 public constant MIN_PROPOSAL_TOKENS = 1_000_000 * 10**18;
+    uint256 public constant MIN_QUORUM = 10_000_000 * 10**18;
 
     enum ProposalState { Active, Passed, Failed, Executed, Cancelled, Queued }
 
@@ -180,6 +181,7 @@ contract AevumDAO {
     }
 
     function setQuorum(uint256 newQuorum) external onlyOwner {
+        require(newQuorum >= 10_000_000 * 10**18, "Below minimum quorum");
         quorumVotes = newQuorum;
         emit QuorumUpdated(newQuorum);
     }
