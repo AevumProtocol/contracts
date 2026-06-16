@@ -51,9 +51,20 @@ contract ReputationController {
         _;
     }
 
-    constructor(address _agentIdentityAddress) {
+    constructor(
+        address _agentIdentityAddress,
+        address _oracle1,
+        address _oracle2
+    ) {
+        require(_oracle1 != address(0) && _oracle2 != address(0), "Invalid oracle addresses");
+        require(_oracle1 != _oracle2, "Oracles must be distinct");
         owner = msg.sender;
         agentIdentity = IAgentIdentity(_agentIdentityAddress);
+        authorizedOracles[_oracle1] = true;
+        authorizedOracles[_oracle2] = true;
+        oracleCount = 2;
+        emit OracleAdded(_oracle1);
+        emit OracleAdded(_oracle2);
     }
 
     function addOracle(address oracle) external onlyOwner {
