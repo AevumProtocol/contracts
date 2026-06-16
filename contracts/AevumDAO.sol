@@ -65,6 +65,7 @@ contract AevumDAO {
     }
 
     constructor(address _aevToken, uint256 _quorumVotes) {
+        require(_quorumVotes >= MIN_QUORUM, "Below minimum quorum");
         owner = msg.sender;
         aevToken = IERC20(_aevToken);
         quorumVotes = _quorumVotes;
@@ -181,7 +182,7 @@ contract AevumDAO {
     }
 
     function setQuorum(uint256 newQuorum) external onlyOwner {
-        require(newQuorum >= 10_000_000 * 10**18, "Below minimum quorum");
+        require(newQuorum >= MIN_QUORUM, "Below minimum quorum");
         quorumVotes = newQuorum;
         emit QuorumUpdated(newQuorum);
     }
