@@ -9,7 +9,7 @@ interface IReputationOracle {
 contract AgentVault {
 
     address public owner;
-    IReputationOracle public oracle;
+    IReputationOracle public immutable oracle;
 
     uint256 public defaultWithdrawLimit;
     uint256 public cooldownPeriod = 1 days;

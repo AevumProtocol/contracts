@@ -9,7 +9,7 @@ interface IAgentIdentity {
 contract ReputationController {
 
     address public owner;
-    IAgentIdentity public agentIdentity;
+    IAgentIdentity public immutable agentIdentity;
 
     uint256 public constant MAX_SCORE = 1000;
     uint256 public constant MIN_APPROVALS = 2;

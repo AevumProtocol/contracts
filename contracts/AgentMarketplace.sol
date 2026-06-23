@@ -9,7 +9,7 @@ interface IReputationOracle {
 contract AgentMarketplace {
 
     address public owner;
-    IReputationOracle public oracle;
+    IReputationOracle public immutable oracle;
 
     uint256 public listingCount;
     uint256 public jobCount;
