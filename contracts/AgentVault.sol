@@ -40,6 +40,7 @@ contract AgentVault {
     }
 
     constructor(address _oracleAddress, uint256 _defaultWithdrawLimit) {
+        require(_oracleAddress != address(0), "Invalid oracle address");
         owner = msg.sender;
         oracle = IReputationOracle(_oracleAddress);
         defaultWithdrawLimit = _defaultWithdrawLimit;
@@ -77,18 +78,22 @@ contract AgentVault {
         agentTotalWithdrawn[msg.sender] += amount;
         totalDeposited -= amount;
 
+        // Emit before external call
+        emit Withdrawn(msg.sender, amount);
+
         (bool success, ) = payable(msg.sender).call{value: amount}("");
         require(success, "Transfer failed");
-
-        emit Withdrawn(msg.sender, amount);
     }
 
     function rescueETH() external onlyOwner {
         uint256 surplus = address(this).balance - totalDeposited;
         require(surplus > 0, "No surplus ETH to rescue");
+
+        // Emit before external call
+        emit ETHRescued(owner, surplus);
+
         (bool success, ) = payable(owner).call{value: surplus}("");
         require(success, "Rescue failed");
-        emit ETHRescued(owner, surplus);
     }
 
     function setWithdrawLimit(address agent, uint256 limit) external onlyOwner {

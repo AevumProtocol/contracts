@@ -60,6 +60,7 @@ contract AgentMarketplace {
     }
 
     constructor(address _oracleAddress) {
+        require(_oracleAddress != address(0), "Invalid oracle address");
         owner = msg.sender;
         oracle = IReputationOracle(_oracleAddress);
     }
@@ -124,11 +125,14 @@ contract AgentMarketplace {
         job.status = JobStatus.Completed;
         uint256 fee = (job.amount * platformFeeBps) / 10000;
         uint256 agentPayment = job.amount - fee;
+
+        // Emit before external calls
+        emit JobCompleted(jobId, job.agent, agentPayment);
+
         (bool agentPaid, ) = payable(job.agent).call{value: agentPayment}("");
         require(agentPaid, "Agent payment failed");
         (bool feePaid, ) = payable(owner).call{value: fee}("");
         require(feePaid, "Fee payment failed");
-        emit JobCompleted(jobId, job.agent, agentPayment);
     }
 
     function disputeJob(uint256 jobId) external {
@@ -147,11 +151,14 @@ contract AgentMarketplace {
         uint256 fee = (job.amount * platformFeeBps) / 10000;
         uint256 winnerPayment = job.amount - fee;
         address winner = favorAgent ? job.agent : job.client;
+
+        // Emit before external calls
+        emit DisputeResolved(jobId, winner, winnerPayment);
+
         (bool paid, ) = payable(winner).call{value: winnerPayment}("");
         require(paid, "Payment failed");
         (bool feePaid, ) = payable(owner).call{value: fee}("");
         require(feePaid, "Fee payment failed");
-        emit DisputeResolved(jobId, winner, winnerPayment);
     }
 
     function claimExpiredDispute(uint256 jobId) external {
@@ -165,11 +172,14 @@ contract AgentMarketplace {
         job.status = JobStatus.Completed;
         uint256 fee = (job.amount * platformFeeBps) / 10000;
         uint256 agentPayment = job.amount - fee;
+
+        // Emit before external calls
+        emit DisputeExpired(jobId, job.agent, agentPayment);
+
         (bool paid, ) = payable(job.agent).call{value: agentPayment}("");
         require(paid, "Payment failed");
         (bool feePaid, ) = payable(owner).call{value: fee}("");
         require(feePaid, "Fee payment failed");
-        emit DisputeExpired(jobId, job.agent, agentPayment);
     }
 
     function cancelJob(uint256 jobId) external {
@@ -181,9 +191,12 @@ contract AgentMarketplace {
             "Must wait 7 days before cancelling"
         );
         job.status = JobStatus.Cancelled;
+
+        // Emit before external call
+        emit JobCancelled(jobId);
+
         (bool refunded, ) = payable(job.client).call{value: job.amount}("");
         require(refunded, "Refund failed");
-        emit JobCancelled(jobId);
     }
 
     function setPlatformFee(uint256 newFeeBps) external onlyOwner {

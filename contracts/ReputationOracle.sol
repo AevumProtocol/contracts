@@ -31,7 +31,12 @@ interface IAgentIdentity {
     function getAgentByAddress(address agentAddress) external view returns (uint256);
 }
 
-contract ReputationOracle {
+interface IReputationOracle {
+    function isAgentAuthorizedView(address agentAddress, address protocol) external view returns (bool);
+    function checkScore(address agentAddress) external view returns (uint256);
+}
+
+contract ReputationOracle is IReputationOracle {
 
     address public owner;
     IAgentIdentity public immutable agentIdentity;

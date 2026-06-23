@@ -160,10 +160,11 @@ contract AevumDAO {
 
         proposal.state = ProposalState.Executed;
 
+        // Emit before external call
+        emit ProposalExecuted(proposalId);
+
         (bool success, ) = proposal.target.call(proposal.callData);
         require(success, "Execution failed");
-
-        emit ProposalExecuted(proposalId);
     }
 
     function cancel(uint256 proposalId) external {
