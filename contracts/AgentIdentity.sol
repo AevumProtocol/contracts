@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-contract AgentIdentity {
+interface IAgentIdentity {
+    function updateReputation(uint256 agentId, uint256 newScore) external;
+    function getAgentByAddress(address agentAddress) external view returns (uint256);
+}
+
+contract AgentIdentity is IAgentIdentity {
 
     struct ExecutionPolicy {
         uint256 maxGasPerTx;

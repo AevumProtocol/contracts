@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  const AGENT_IDENTITY_ADDRESS = "0xc9Ae911e21ABaEa8935a1aad9338A34D9AC6447E";
+  const AGENT_IDENTITY_ADDRESS = "0xC3128B98b5abB0789aF6283A01244Cf05DcEDB87";
   const [deployer] = await hre.ethers.getSigners();
 
   const ORACLE_1 = deployer.address;
