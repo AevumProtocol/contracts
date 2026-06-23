@@ -8,7 +8,7 @@ interface IERC20 {
 contract AevumDAO {
 
     address public owner;
-    IERC20 public aevToken;
+    IERC20 public immutable aevToken;
 
     uint256 public proposalCount;
     uint256 public votingPeriod = 7 days;

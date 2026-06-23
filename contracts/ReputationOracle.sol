@@ -34,7 +34,7 @@ interface IAgentIdentity {
 contract ReputationOracle {
 
     address public owner;
-    IAgentIdentity public agentIdentity;
+    IAgentIdentity public immutable agentIdentity;
 
     uint256 public defaultMinScore = 100;
 
@@ -45,6 +45,7 @@ contract ReputationOracle {
     event AgentApproved(address indexed protocol, uint256 indexed agentId, uint256 score);
     event AgentDenied(address indexed protocol, uint256 indexed agentId, uint256 score);
     event MinScoreUpdated(address indexed protocol, uint256 newScore);
+    event DefaultMinScoreUpdated(uint256 newScore);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -53,6 +54,7 @@ contract ReputationOracle {
     }
 
     constructor(address _agentIdentityAddress) {
+        require(_agentIdentityAddress != address(0), "Invalid address");
         owner = msg.sender;
         agentIdentity = IAgentIdentity(_agentIdentityAddress);
     }
@@ -118,6 +120,7 @@ contract ReputationOracle {
     function setDefaultMinScore(uint256 newScore) external onlyOwner {
         require(newScore <= 1000, "Score exceeds max");
         defaultMinScore = newScore;
+        emit DefaultMinScoreUpdated(newScore);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
