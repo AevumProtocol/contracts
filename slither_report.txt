@@ -1,0 +1,231 @@
+'npx hardhat clean' running (wd: /Users/jonathanquintero/Desktop/aevum_social_bot/aevum-contracts)
+'npx hardhat clean --global' running (wd: /Users/jonathanquintero/Desktop/aevum_social_bot/aevum-contracts)
+Problem executing hardhat: WARNING: You are currently using Node.js v26.0.0, which is not supported by Hardhat. This can lead to unexpected behavior. See https://hardhat.org/nodejs-versions
+
+'npx hardhat compile --force' running (wd: /Users/jonathanquintero/Desktop/aevum_social_bot/aevum-contracts)
+INFO:Detectors:
+Detector: unchecked-transfer
+TokenVesting.revoke(uint256) (contracts/TokenVesting.sol#109-127) ignores return value by aevToken.transfer(schedule.beneficiary,releasable) (contracts/TokenVesting.sol#116)
+TokenVesting.revoke(uint256) (contracts/TokenVesting.sol#109-127) ignores return value by aevToken.transfer(owner,remaining) (contracts/TokenVesting.sol#123)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unchecked-transfer
+INFO:Detectors:
+Detector: divide-before-multiply
+AEVToken._transferWithFee(address,address,uint256) (contracts/AEVToken.sol#165-193) performs a multiplication on the result of a division:
+	- fee = (amount * feeBps) / 10000 (contracts/AEVToken.sol#177)
+	- burnAmount = (fee * BURN_BPS) / 10000 (contracts/AEVToken.sol#178)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#divide-before-multiply
+INFO:Detectors:
+Detector: reentrancy-no-eth
+Reentrancy in TokenVesting.revoke(uint256) (contracts/TokenVesting.sol#109-127):
+	External calls:
+	- aevToken.transfer(schedule.beneficiary,releasable) (contracts/TokenVesting.sol#116)
+	State variables written after the call(s):
+	- schedule.revoked = true (contracts/TokenVesting.sol#120)
+	TokenVesting.schedules (contracts/TokenVesting.sol#26) can be used in cross function reentrancies:
+	- TokenVesting.createSchedule(address,uint256,uint256,uint256,string) (contracts/TokenVesting.sol#51-91)
+	- TokenVesting.releasableAmount(uint256) (contracts/TokenVesting.sol#129-131)
+	- TokenVesting.release(uint256) (contracts/TokenVesting.sol#93-107)
+	- TokenVesting.revoke(uint256) (contracts/TokenVesting.sol#109-127)
+	- TokenVesting.schedules (contracts/TokenVesting.sol#26)
+	- TokenVesting.vestedAmount(uint256) (contracts/TokenVesting.sol#133-135)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-2
+INFO:Detectors:
+Detector: events-maths
+AEVToken.setFeeBps(uint256) (contracts/AEVToken.sol#154-157) should emit an event for: 
+	- feeBps = newFeeBps (contracts/AEVToken.sol#156) 
+ReputationOracle.setDefaultMinScore(uint256) (contracts/ReputationOracle.sol#118-121) should emit an event for: 
+	- defaultMinScore = newScore (contracts/ReputationOracle.sol#120) 
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-events-arithmetic
+INFO:Detectors:
+Detector: missing-zero-check
+AEVToken.constructor(address,address,address,address,address,address)._ecosystemWallet (contracts/AEVToken.sol#59) lacks a zero-check on :
+		- ecosystemWallet = _ecosystemWallet (contracts/AEVToken.sol#69)
+AEVToken.constructor(address,address,address,address,address,address)._daoTreasuryWallet (contracts/AEVToken.sol#60) lacks a zero-check on :
+		- daoTreasuryWallet = _daoTreasuryWallet (contracts/AEVToken.sol#70)
+AEVToken.constructor(address,address,address,address,address,address)._communityWallet (contracts/AEVToken.sol#61) lacks a zero-check on :
+		- communityWallet = _communityWallet (contracts/AEVToken.sol#71)
+AEVToken.constructor(address,address,address,address,address,address)._teamWallet (contracts/AEVToken.sol#62) lacks a zero-check on :
+		- teamWallet = _teamWallet (contracts/AEVToken.sol#72)
+AEVToken.constructor(address,address,address,address,address,address)._liquidityWallet (contracts/AEVToken.sol#63) lacks a zero-check on :
+		- liquidityWallet = _liquidityWallet (contracts/AEVToken.sol#73)
+AEVToken.constructor(address,address,address,address,address,address)._investorWallet (contracts/AEVToken.sol#64) lacks a zero-check on :
+		- investorWallet = _investorWallet (contracts/AEVToken.sol#74)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+INFO:Detectors:
+Detector: reentrancy-events
+Reentrancy in ReputationController._executeProposal(uint256) (contracts/ReputationController.sol#119-124):
+	External calls:
+	- agentIdentity.updateReputation(proposal.agentId,proposal.newScore) (contracts/ReputationController.sol#122)
+	Event emitted after the call(s):
+	- ProposalExecuted(proposalId,proposal.agentId,proposal.newScore) (contracts/ReputationController.sol#123)
+Reentrancy in AgentMarketplace.cancelJob(uint256) (contracts/AgentMarketplace.sol#175-187):
+	External calls:
+	- (refunded,None) = address(job.client).call{value: job.amount}() (contracts/AgentMarketplace.sol#184)
+	Event emitted after the call(s):
+	- JobCancelled(jobId) (contracts/AgentMarketplace.sol#186)
+Reentrancy in AgentMarketplace.claimExpiredDispute(uint256) (contracts/AgentMarketplace.sol#157-173):
+	External calls:
+	- (paid,None) = address(job.agent).call{value: agentPayment}() (contracts/AgentMarketplace.sol#168)
+	- (feePaid,None) = address(owner).call{value: fee}() (contracts/AgentMarketplace.sol#170)
+	Event emitted after the call(s):
+	- DisputeExpired(jobId,job.agent,agentPayment) (contracts/AgentMarketplace.sol#172)
+Reentrancy in AgentMarketplace.completeJob(uint256) (contracts/AgentMarketplace.sol#116-132):
+	External calls:
+	- (agentPaid,None) = address(job.agent).call{value: agentPayment}() (contracts/AgentMarketplace.sol#127)
+	- (feePaid,None) = address(owner).call{value: fee}() (contracts/AgentMarketplace.sol#129)
+	Event emitted after the call(s):
+	- JobCompleted(jobId,job.agent,agentPayment) (contracts/AgentMarketplace.sol#131)
+Reentrancy in AevumDAO.execute(uint256) (contracts/AevumDAO.sol#153-167):
+	External calls:
+	- (success,None) = proposal.target.call(proposal.callData) (contracts/AevumDAO.sol#163)
+	Event emitted after the call(s):
+	- ProposalExecuted(proposalId) (contracts/AevumDAO.sol#166)
+Reentrancy in TokenVesting.release(uint256) (contracts/TokenVesting.sol#93-107):
+	External calls:
+	- success = aevToken.transfer(schedule.beneficiary,releasable) (contracts/TokenVesting.sol#103)
+	Event emitted after the call(s):
+	- TokensReleased(scheduleId,schedule.beneficiary,releasable) (contracts/TokenVesting.sol#106)
+Reentrancy in AgentVault.rescueETH() (contracts/AgentVault.sol#86-92):
+	External calls:
+	- (success,None) = address(owner).call{value: surplus}() (contracts/AgentVault.sol#89)
+	Event emitted after the call(s):
+	- ETHRescued(owner,surplus) (contracts/AgentVault.sol#91)
+Reentrancy in AgentMarketplace.resolveDispute(uint256,bool) (contracts/AgentMarketplace.sol#143-155):
+	External calls:
+	- (paid,None) = address(winner).call{value: winnerPayment}() (contracts/AgentMarketplace.sol#150)
+	- (feePaid,None) = address(owner).call{value: fee}() (contracts/AgentMarketplace.sol#152)
+	Event emitted after the call(s):
+	- DisputeResolved(jobId,winner,winnerPayment) (contracts/AgentMarketplace.sol#154)
+Reentrancy in TokenVesting.revoke(uint256) (contracts/TokenVesting.sol#109-127):
+	External calls:
+	- aevToken.transfer(schedule.beneficiary,releasable) (contracts/TokenVesting.sol#116)
+	- aevToken.transfer(owner,remaining) (contracts/TokenVesting.sol#123)
+	Event emitted after the call(s):
+	- ScheduleRevoked(scheduleId,schedule.beneficiary,remaining) (contracts/TokenVesting.sol#126)
+Reentrancy in AgentVault.withdraw(uint256) (contracts/AgentVault.sol#59-84):
+	External calls:
+	- (success,None) = address(msg.sender).call{value: amount}() (contracts/AgentVault.sol#80)
+	Event emitted after the call(s):
+	- Withdrawn(msg.sender,amount) (contracts/AgentVault.sol#83)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-4
+INFO:Detectors:
+Detector: timestamp
+AevumDAO.vote(uint256,bool) (contracts/AevumDAO.sol#111-135) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(proposal.state == ProposalState.Active,Proposal not active) (contracts/AevumDAO.sol#113)
+	- require(bool,string)(block.timestamp <= proposal.endTime,Voting period ended) (contracts/AevumDAO.sol#114)
+AevumDAO.finalize(uint256) (contracts/AevumDAO.sol#137-151) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(proposal.state == ProposalState.Active,Proposal not active) (contracts/AevumDAO.sol#139)
+	- require(bool,string)(block.timestamp > proposal.endTime,Voting still active) (contracts/AevumDAO.sol#140)
+AevumDAO.execute(uint256) (contracts/AevumDAO.sol#153-167) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(proposal.state == ProposalState.Queued,Proposal not queued) (contracts/AevumDAO.sol#155)
+	- require(bool,string)(block.timestamp >= proposal.executionTime,Timelock delay not met) (contracts/AevumDAO.sol#156-159)
+AevumDAO.cancel(uint256) (contracts/AevumDAO.sol#169-182) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == proposal.proposer || msg.sender == owner,Not proposer or owner) (contracts/AevumDAO.sol#171-174)
+	- require(bool,string)(proposal.state == ProposalState.Active || proposal.state == ProposalState.Queued,Cannot cancel) (contracts/AevumDAO.sol#175-179)
+AgentMarketplace.completeJob(uint256) (contracts/AgentMarketplace.sol#116-132) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == job.client,Only client can complete) (contracts/AgentMarketplace.sol#118)
+	- require(bool,string)(job.status == JobStatus.InProgress,Job not in progress) (contracts/AgentMarketplace.sol#119)
+	- require(bool,string)(block.timestamp >= job.createdAt + minJobDuration,Job must run for minimum duration before completion) (contracts/AgentMarketplace.sol#120-123)
+AgentMarketplace.disputeJob(uint256) (contracts/AgentMarketplace.sol#134-141) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == job.client,Only client can dispute) (contracts/AgentMarketplace.sol#136)
+	- require(bool,string)(job.status == JobStatus.InProgress,Job not in progress) (contracts/AgentMarketplace.sol#137)
+AgentMarketplace.resolveDispute(uint256,bool) (contracts/AgentMarketplace.sol#143-155) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(job.status == JobStatus.Disputed,Job not disputed) (contracts/AgentMarketplace.sol#145)
+AgentMarketplace.claimExpiredDispute(uint256) (contracts/AgentMarketplace.sol#157-173) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(job.status == JobStatus.Disputed,Job not disputed) (contracts/AgentMarketplace.sol#159)
+	- require(bool,string)(msg.sender == job.agent,Only agent can claim) (contracts/AgentMarketplace.sol#160)
+	- require(bool,string)(block.timestamp >= job.disputedAt + maxDisputeWindow,Dispute window not expired) (contracts/AgentMarketplace.sol#161-164)
+AgentMarketplace.cancelJob(uint256) (contracts/AgentMarketplace.sol#175-187) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == job.client,Only client can cancel) (contracts/AgentMarketplace.sol#177)
+	- require(bool,string)(job.status == JobStatus.InProgress,Job not in progress) (contracts/AgentMarketplace.sol#178)
+	- require(bool,string)(block.timestamp >= job.createdAt + 604800,Must wait 7 days before cancelling) (contracts/AgentMarketplace.sol#179-182)
+AgentVault.withdraw(uint256) (contracts/AgentVault.sol#59-84) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(block.timestamp >= agentLastWithdraw[msg.sender] + cooldownPeriod,Cooldown period not met) (contracts/AgentVault.sol#71-74)
+TokenVesting.release(uint256) (contracts/TokenVesting.sol#93-107) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == schedule.beneficiary,Not beneficiary) (contracts/TokenVesting.sol#95)
+	- require(bool,string)(! schedule.revoked,Schedule revoked) (contracts/TokenVesting.sol#96)
+	- require(bool,string)(releasable > 0,No tokens to release) (contracts/TokenVesting.sol#99)
+	- require(bool,string)(success,Token transfer failed) (contracts/TokenVesting.sol#104)
+TokenVesting.revoke(uint256) (contracts/TokenVesting.sol#109-127) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(! schedule.revoked,Already revoked) (contracts/TokenVesting.sol#111)
+	- releasable > 0 (contracts/TokenVesting.sol#114)
+TokenVesting._vestedAmount(TokenVesting.VestingSchedule) (contracts/TokenVesting.sol#145-161) uses timestamp for comparisons
+	Dangerous comparisons:
+	- elapsed < schedule.cliffDuration (contracts/TokenVesting.sol#152)
+	- elapsed >= schedule.vestingDuration (contracts/TokenVesting.sol#156)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+INFO:Detectors:
+Detector: solc-version
+Version constraint ^0.8.20 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
+	- VerbatimInvalidDeduplication
+	- FullInlinerNonExpressionSplitArgumentEvaluationOrder
+	- MissingSideEffectsOnSelectorAccess.
+It is used by:
+	- ^0.8.20 (contracts/AEVToken.sol#2)
+	- ^0.8.20 (contracts/AevumDAO.sol#2)
+	- ^0.8.20 (contracts/AgentIdentity.sol#2)
+	- ^0.8.20 (contracts/AgentMarketplace.sol#2)
+	- ^0.8.20 (contracts/AgentVault.sol#2)
+	- ^0.8.20 (contracts/ReputationController.sol#2)
+	- ^0.8.20 (contracts/ReputationOracle.sol#2)
+	- ^0.8.20 (contracts/TokenVesting.sol#2)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-versions-of-solidity
+INFO:Detectors:
+Detector: low-level-calls
+Low level call in AevumDAO.execute(uint256) (contracts/AevumDAO.sol#153-167):
+	- (success,None) = proposal.target.call(proposal.callData) (contracts/AevumDAO.sol#163)
+Low level call in AgentMarketplace.completeJob(uint256) (contracts/AgentMarketplace.sol#116-132):
+	- (agentPaid,None) = address(job.agent).call{value: agentPayment}() (contracts/AgentMarketplace.sol#127)
+	- (feePaid,None) = address(owner).call{value: fee}() (contracts/AgentMarketplace.sol#129)
+Low level call in AgentMarketplace.resolveDispute(uint256,bool) (contracts/AgentMarketplace.sol#143-155):
+	- (paid,None) = address(winner).call{value: winnerPayment}() (contracts/AgentMarketplace.sol#150)
+	- (feePaid,None) = address(owner).call{value: fee}() (contracts/AgentMarketplace.sol#152)
+Low level call in AgentMarketplace.claimExpiredDispute(uint256) (contracts/AgentMarketplace.sol#157-173):
+	- (paid,None) = address(job.agent).call{value: agentPayment}() (contracts/AgentMarketplace.sol#168)
+	- (feePaid,None) = address(owner).call{value: fee}() (contracts/AgentMarketplace.sol#170)
+Low level call in AgentMarketplace.cancelJob(uint256) (contracts/AgentMarketplace.sol#175-187):
+	- (refunded,None) = address(job.client).call{value: job.amount}() (contracts/AgentMarketplace.sol#184)
+Low level call in AgentVault.withdraw(uint256) (contracts/AgentVault.sol#59-84):
+	- (success,None) = address(msg.sender).call{value: amount}() (contracts/AgentVault.sol#80)
+Low level call in AgentVault.rescueETH() (contracts/AgentVault.sol#86-92):
+	- (success,None) = address(owner).call{value: surplus}() (contracts/AgentVault.sol#89)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+INFO:Detectors:
+Detector: missing-inheritance
+AgentIdentity (contracts/AgentIdentity.sol#4-170) should inherit from IAgentIdentity (contracts/ReputationController.sol#4-7)
+ReputationOracle (contracts/ReputationOracle.sol#34-128) should inherit from IReputationOracle (contracts/AgentMarketplace.sol#4-7)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-inheritance
+INFO:Detectors:
+Detector: constable-states
+AEVToken.decimals (contracts/AEVToken.sol#19) should be constant 
+AEVToken.name (contracts/AEVToken.sol#17) should be constant 
+AEVToken.symbol (contracts/AEVToken.sol#18) should be constant 
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#state-variables-that-could-be-declared-constant
+INFO:Detectors:
+Detector: immutable-states
+AEVToken.communityWallet (contracts/AEVToken.sol#31) should be immutable 
+AEVToken.daoTreasuryWallet (contracts/AEVToken.sol#30) should be immutable 
+AEVToken.ecosystemWallet (contracts/AEVToken.sol#29) should be immutable 
+AEVToken.investorWallet (contracts/AEVToken.sol#34) should be immutable 
+AEVToken.liquidityWallet (contracts/AEVToken.sol#33) should be immutable 
+AEVToken.teamWallet (contracts/AEVToken.sol#32) should be immutable 
+AevumDAO.aevToken (contracts/AevumDAO.sol#11) should be immutable 
+AgentMarketplace.oracle (contracts/AgentMarketplace.sol#12) should be immutable 
+AgentVault.oracle (contracts/AgentVault.sol#12) should be immutable 
+ReputationController.agentIdentity (contracts/ReputationController.sol#12) should be immutable 
+ReputationOracle.agentIdentity (contracts/ReputationOracle.sol#37) should be immutable 
+TokenVesting.aevToken (contracts/TokenVesting.sol#12) should be immutable 
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#state-variables-that-could-be-declared-immutable
+INFO:Slither:. analyzed (15 contracts with 101 detectors), 60 result(s) found
