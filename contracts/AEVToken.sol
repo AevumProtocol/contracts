@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.28;
 
 interface IERC20 {
     function totalSupply() external view returns (uint256);
@@ -14,9 +14,9 @@ interface IERC20 {
 
 contract AEVToken is IERC20 {
 
-    string public name = "Aevum Protocol";
-    string public symbol = "AEV";
-    uint8 public decimals = 18;
+    string public constant name = "Aevum Protocol";
+    string public constant symbol = "AEV";
+    uint8 public constant decimals = 18;
 
     uint256 public constant MAX_SUPPLY = 1_000_000_000 * 10**18;
     uint256 public constant BURN_BPS = 5000;
@@ -26,12 +26,13 @@ contract AEVToken is IERC20 {
 
     address public owner;
     address public feeCollector;
-    address public ecosystemWallet;
-    address public daoTreasuryWallet;
-    address public communityWallet;
-    address public teamWallet;
-    address public liquidityWallet;
-    address public investorWallet;
+
+    address public immutable ecosystemWallet;
+    address public immutable daoTreasuryWallet;
+    address public immutable communityWallet;
+    address public immutable teamWallet;
+    address public immutable liquidityWallet;
+    address public immutable investorWallet;
 
     bool public transfersEnabled = false;
     uint256 public feeBps = 100;
@@ -43,6 +44,7 @@ contract AEVToken is IERC20 {
     event Burned(address indexed from, uint256 amount);
     event TransfersEnabled();
     event FeeCollectorUpdated(address indexed newCollector);
+    event FeeBpsUpdated(uint256 newFeeBps);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -63,15 +65,22 @@ contract AEVToken is IERC20 {
         address _liquidityWallet,
         address _investorWallet
     ) {
+        require(_ecosystemWallet != address(0), "Invalid ecosystem wallet");
+        require(_daoTreasuryWallet != address(0), "Invalid DAO treasury wallet");
+        require(_communityWallet != address(0), "Invalid community wallet");
+        require(_teamWallet != address(0), "Invalid team wallet");
+        require(_liquidityWallet != address(0), "Invalid liquidity wallet");
+        require(_investorWallet != address(0), "Invalid investor wallet");
+
         owner = msg.sender;
         feeCollector = msg.sender;
 
-        ecosystemWallet    = _ecosystemWallet;
-        daoTreasuryWallet  = _daoTreasuryWallet;
-        communityWallet    = _communityWallet;
-        teamWallet         = _teamWallet;
-        liquidityWallet    = _liquidityWallet;
-        investorWallet     = _investorWallet;
+        ecosystemWallet   = _ecosystemWallet;
+        daoTreasuryWallet = _daoTreasuryWallet;
+        communityWallet   = _communityWallet;
+        teamWallet        = _teamWallet;
+        liquidityWallet   = _liquidityWallet;
+        investorWallet    = _investorWallet;
 
         isExcludedFromFee[msg.sender]        = true;
         isExcludedFromFee[_ecosystemWallet]  = true;
@@ -81,13 +90,12 @@ contract AEVToken is IERC20 {
         isExcludedFromFee[_liquidityWallet]  = true;
         isExcludedFromFee[_investorWallet]   = true;
 
-        // Mint per whitepaper allocations to separate wallets
-        _mint(_ecosystemWallet,   MAX_SUPPLY * 30 / 100); // 30% ecosystem
-        _mint(_daoTreasuryWallet, MAX_SUPPLY * 20 / 100); // 20% DAO treasury
-        _mint(_communityWallet,   MAX_SUPPLY * 15 / 100); // 15% community airdrop
-        _mint(_teamWallet,        MAX_SUPPLY * 15 / 100); // 15% team
-        _mint(_liquidityWallet,   MAX_SUPPLY * 10 / 100); // 10% liquidity
-        _mint(_investorWallet,    MAX_SUPPLY * 10 / 100); // 10% strategic investors
+        _mint(_ecosystemWallet,   MAX_SUPPLY * 30 / 100);
+        _mint(_daoTreasuryWallet, MAX_SUPPLY * 20 / 100);
+        _mint(_communityWallet,   MAX_SUPPLY * 15 / 100);
+        _mint(_teamWallet,        MAX_SUPPLY * 15 / 100);
+        _mint(_liquidityWallet,   MAX_SUPPLY * 10 / 100);
+        _mint(_investorWallet,    MAX_SUPPLY * 10 / 100);
     }
 
     function totalSupply() external view override returns (uint256) {
@@ -154,6 +162,7 @@ contract AEVToken is IERC20 {
     function setFeeBps(uint256 newFeeBps) external onlyOwner {
         require(newFeeBps <= 500, "Fee too high");
         feeBps = newFeeBps;
+        emit FeeBpsUpdated(newFeeBps);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
@@ -174,6 +183,7 @@ contract AEVToken is IERC20 {
             return;
         }
 
+        // Multiply first, divide last — fixes precision loss
         uint256 fee = (amount * feeBps) / 10000;
         uint256 burnAmount = (fee * BURN_BPS) / 10000;
         uint256 collectorAmount = fee - burnAmount;

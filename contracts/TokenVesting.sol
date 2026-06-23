@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.28;
 
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
@@ -8,8 +8,8 @@ interface IERC20 {
 
 contract TokenVesting {
 
-    address public owner;
-    IERC20 public aevToken;
+    address public immutable owner;
+    IERC20 public immutable aevToken;
 
     struct VestingSchedule {
         address beneficiary;
@@ -44,6 +44,7 @@ contract TokenVesting {
     }
 
     constructor(address _aevToken) {
+        require(_aevToken != address(0), "Invalid token address");
         owner = msg.sender;
         aevToken = IERC20(_aevToken);
     }
@@ -98,10 +99,10 @@ contract TokenVesting {
         uint256 releasable = _releasableAmount(schedule);
         require(releasable > 0, "No tokens to release");
 
+        // Update state before transfer — reentrancy protection
         schedule.released += releasable;
 
-        bool success = aevToken.transfer(schedule.beneficiary, releasable);
-        require(success, "Token transfer failed");
+        require(aevToken.transfer(schedule.beneficiary, releasable), "Token transfer failed");
 
         emit TokensReleased(scheduleId, schedule.beneficiary, releasable);
     }
@@ -111,16 +112,18 @@ contract TokenVesting {
         require(!schedule.revoked, "Already revoked");
 
         uint256 releasable = _releasableAmount(schedule);
+        uint256 remaining = schedule.totalAmount - schedule.released - releasable;
+
+        // Update state BEFORE transfers — reentrancy protection
+        schedule.revoked = true;
+        schedule.released += releasable;
+
         if (releasable > 0) {
-            schedule.released += releasable;
-            aevToken.transfer(schedule.beneficiary, releasable);
+            require(aevToken.transfer(schedule.beneficiary, releasable), "Beneficiary transfer failed");
         }
 
-        uint256 remaining = schedule.totalAmount - schedule.released;
-        schedule.revoked = true;
-
         if (remaining > 0) {
-            aevToken.transfer(owner, remaining);
+            require(aevToken.transfer(owner, remaining), "Owner transfer failed");
         }
 
         emit ScheduleRevoked(scheduleId, schedule.beneficiary, remaining);
@@ -158,11 +161,5 @@ contract TokenVesting {
         }
 
         return (schedule.totalAmount * elapsed) / schedule.vestingDuration;
-    }
-
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid address");
-        emit OwnershipTransferred(owner, newOwner);
-        owner = newOwner;
     }
 }

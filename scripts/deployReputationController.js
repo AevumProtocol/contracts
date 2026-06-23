@@ -1,13 +1,11 @@
 const hre = require("hardhat");
 
 async function main() {
-  const AGENT_IDENTITY_ADDRESS = "0x713d435AE624Ab68650Ba21E9891477f2f5175d2";
+  const AGENT_IDENTITY_ADDRESS = "0xc9Ae911e21ABaEa8935a1aad9338A34D9AC6447E";
   const [deployer] = await hre.ethers.getSigners();
 
-  // On testnet we use deployer for both oracles
-  // On mainnet these must be two distinct trusted addresses
   const ORACLE_1 = deployer.address;
-  const ORACLE_2 = "0x000000000000000000000000000000000000dEaD"; // placeholder second oracle
+  const ORACLE_2 = "0x000000000000000000000000000000000000dEaD";
 
   const ReputationController = await hre.ethers.getContractFactory("ReputationController");
   const controller = await ReputationController.deploy(
