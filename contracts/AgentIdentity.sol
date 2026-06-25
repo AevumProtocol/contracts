@@ -40,10 +40,16 @@ contract AgentIdentity is IAgentIdentity {
     address public owner;
     address public reputationController;
 
+    // Approved cert issuers — M-01
+    mapping(address => bool) public approvedCertIssuers;
+
     event AgentRegistered(uint256 indexed agentId, address indexed agentOwner, bytes32 strategyHash);
     event StrategyUpdated(uint256 indexed agentId, bytes32 newHash);
     event ReputationUpdated(uint256 indexed agentId, uint256 newScore);
     event CertificateAdded(uint256 indexed agentId, bytes32 certHash);
+    event ExecutionPolicyUpdated(uint256 indexed agentId);
+    event AgentDeactivated(uint256 indexed agentId, address indexed agentOwner);
+    event CertIssuerApproved(address indexed issuer, bool approved);
     event ControllerUpdated(address indexed newController);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -81,6 +87,12 @@ contract AgentIdentity is IAgentIdentity {
         emit ControllerUpdated(controller);
     }
 
+    function setApprovedCertIssuer(address issuer, bool approved) external onlyOwner {
+        require(issuer != address(0), "Invalid issuer address");
+        approvedCertIssuers[issuer] = approved;
+        emit CertIssuerApproved(issuer, approved);
+    }
+
     function registerAgent(
         bytes32 strategyHash,
         string calldata metadataURI,
@@ -112,11 +124,14 @@ contract AgentIdentity is IAgentIdentity {
         emit StrategyUpdated(agentId, newHash);
     }
 
+    /// @notice Performance certs must be issued by an approved issuer, not self-issued
     function addPerformanceCert(
         uint256 agentId,
         bytes32 certHash,
         string calldata metadataURI
-    ) external agentExists(agentId) onlyAgentOwner(agentId) {
+    ) external agentExists(agentId) {
+        require(approvedCertIssuers[msg.sender], "Not an approved cert issuer");
+
         PerformanceCert memory cert = PerformanceCert({
             certHash: certHash,
             timestamp: block.timestamp,
@@ -128,24 +143,29 @@ contract AgentIdentity is IAgentIdentity {
     }
 
     function updateReputation(uint256 agentId, uint256 newScore)
-        external onlyAuthorizedController agentExists(agentId)
+        external override onlyAuthorizedController agentExists(agentId)
     {
         require(newScore <= 1000, "Score exceeds max");
         _agents[agentId].reputationScore = newScore;
         emit ReputationUpdated(agentId, newScore);
     }
 
+    /// @notice ExecutionPolicy fields are advisory — enforced off-chain by agent operators
     function setExecutionPolicy(uint256 agentId, ExecutionPolicy calldata policy)
         external agentExists(agentId) onlyAgentOwner(agentId)
     {
         _agents[agentId].policy = policy;
+        emit ExecutionPolicyUpdated(agentId);
     }
 
     function deactivateAgent(uint256 agentId)
         external agentExists(agentId) onlyAgentOwner(agentId)
     {
+        // M-03 fix: clear both mappings on deactivation
         _agents[agentId].isActive = false;
+        _agents[agentId].owner = address(0);
         _ownerToAgentId[msg.sender] = 0;
+        emit AgentDeactivated(agentId, msg.sender);
     }
 
     function getAgent(uint256 agentId)
@@ -156,7 +176,7 @@ contract AgentIdentity is IAgentIdentity {
     }
 
     function getAgentByAddress(address agentAddress)
-        external view
+        external view override
         returns (uint256)
     {
         return _ownerToAgentId[agentAddress];
