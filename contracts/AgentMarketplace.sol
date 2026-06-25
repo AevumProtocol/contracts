@@ -6,7 +6,7 @@ interface IReputationOracle {
     function checkScore(address agentAddress) external view returns (uint256);
 }
 
-contract AgentMarketplace {
+contract AgentMarketplace is IReputationOracle {
 
     address public owner;
     IReputationOracle public immutable oracle;
@@ -16,6 +16,11 @@ contract AgentMarketplace {
     uint256 public platformFeeBps = 250;
     uint256 public maxDisputeWindow = 7 days;
     uint256 public minJobDuration = 1 hours;
+    uint256 public minCancelDelay = 7 days;
+    uint256 public constant maxJobDuration = 90 days;
+
+    // Pull payment pattern for owner fees
+    mapping(address => uint256) public pendingFees;
 
     enum JobStatus { Open, InProgress, Completed, Disputed, Cancelled }
 
@@ -52,6 +57,12 @@ contract AgentMarketplace {
     event JobCancelled(uint256 indexed jobId);
     event DisputeResolved(uint256 indexed jobId, address winner, uint256 amount);
     event DisputeExpired(uint256 indexed jobId, address agent, uint256 amount);
+    event FeeWithdrawn(address indexed owner, uint256 amount);
+    event PlatformFeeUpdated(uint256 newFeeBps);
+    event MaxDisputeWindowUpdated(uint256 newWindow);
+    event MinJobDurationUpdated(uint256 newDuration);
+    event MinCancelDelayUpdated(uint256 newDelay);
+    event EmergencyCancelled(uint256 indexed jobId);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -63,6 +74,14 @@ contract AgentMarketplace {
         require(_oracleAddress != address(0), "Invalid oracle address");
         owner = msg.sender;
         oracle = IReputationOracle(_oracleAddress);
+    }
+
+    // IReputationOracle stub — not used internally, satisfies inheritance
+    function isAgentAuthorizedView(address, address) external pure override returns (bool) {
+        return false;
+    }
+    function checkScore(address) external pure override returns (uint256) {
+        return 0;
     }
 
     function createListing(
@@ -87,6 +106,7 @@ contract AgentMarketplace {
         return listingCount;
     }
 
+    /// @notice Deactivating a listing does not affect jobs already in progress
     function deactivateListing(uint256 listingId) external {
         require(listings[listingId].agent == msg.sender, "Not listing owner");
         listings[listingId].active = false;
@@ -98,6 +118,11 @@ contract AgentMarketplace {
         require(listing.active, "Listing not active");
         require(msg.value == listing.priceWei, "Incorrect payment amount");
         require(msg.sender != listing.agent, "Cannot hire yourself");
+
+        // Check agent is still authorized at hire time
+        bool authorized = oracle.isAgentAuthorizedView(listing.agent, address(this));
+        require(authorized, "Agent no longer authorized");
+
         jobCount++;
         jobs[jobCount] = Job({
             id: jobCount,
@@ -126,13 +151,13 @@ contract AgentMarketplace {
         uint256 fee = (job.amount * platformFeeBps) / 10000;
         uint256 agentPayment = job.amount - fee;
 
-        // Emit before external calls
+        // Pull pattern for fees
+        pendingFees[owner] += fee;
+
         emit JobCompleted(jobId, job.agent, agentPayment);
 
         (bool agentPaid, ) = payable(job.agent).call{value: agentPayment}("");
         require(agentPaid, "Agent payment failed");
-        (bool feePaid, ) = payable(owner).call{value: fee}("");
-        require(feePaid, "Fee payment failed");
     }
 
     function disputeJob(uint256 jobId) external {
@@ -152,13 +177,13 @@ contract AgentMarketplace {
         uint256 winnerPayment = job.amount - fee;
         address winner = favorAgent ? job.agent : job.client;
 
-        // Emit before external calls
+        // Pull pattern for fees
+        pendingFees[owner] += fee;
+
         emit DisputeResolved(jobId, winner, winnerPayment);
 
         (bool paid, ) = payable(winner).call{value: winnerPayment}("");
         require(paid, "Payment failed");
-        (bool feePaid, ) = payable(owner).call{value: fee}("");
-        require(feePaid, "Fee payment failed");
     }
 
     function claimExpiredDispute(uint256 jobId) external {
@@ -173,13 +198,13 @@ contract AgentMarketplace {
         uint256 fee = (job.amount * platformFeeBps) / 10000;
         uint256 agentPayment = job.amount - fee;
 
-        // Emit before external calls
+        // Pull pattern for fees
+        pendingFees[owner] += fee;
+
         emit DisputeExpired(jobId, job.agent, agentPayment);
 
         (bool paid, ) = payable(job.agent).call{value: agentPayment}("");
         require(paid, "Payment failed");
-        (bool feePaid, ) = payable(owner).call{value: fee}("");
-        require(feePaid, "Fee payment failed");
     }
 
     function cancelJob(uint256 jobId) external {
@@ -187,29 +212,66 @@ contract AgentMarketplace {
         require(msg.sender == job.client, "Only client can cancel");
         require(job.status == JobStatus.InProgress, "Job not in progress");
         require(
-            block.timestamp >= job.createdAt + 7 days,
-            "Must wait 7 days before cancelling"
+            block.timestamp >= job.createdAt + minCancelDelay,
+            "Must wait minimum delay before cancelling"
         );
         job.status = JobStatus.Cancelled;
 
-        // Emit before external call
         emit JobCancelled(jobId);
 
         (bool refunded, ) = payable(job.client).call{value: job.amount}("");
         require(refunded, "Refund failed");
     }
 
+    function emergencyCancel(uint256 jobId) external onlyOwner {
+        Job storage job = jobs[jobId];
+        require(
+            job.status == JobStatus.InProgress || job.status == JobStatus.Disputed,
+            "Job not active"
+        );
+        require(
+            block.timestamp >= job.createdAt + maxJobDuration,
+            "Job not stuck yet"
+        );
+        job.status = JobStatus.Cancelled;
+
+        emit EmergencyCancelled(jobId);
+
+        (bool refunded, ) = payable(job.client).call{value: job.amount}("");
+        require(refunded, "Refund failed");
+    }
+
+    function withdrawFees() external onlyOwner {
+        uint256 amount = pendingFees[owner];
+        require(amount > 0, "No fees to withdraw");
+        pendingFees[owner] = 0;
+
+        emit FeeWithdrawn(owner, amount);
+
+        (bool success, ) = payable(owner).call{value: amount}("");
+        require(success, "Fee withdrawal failed");
+    }
+
     function setPlatformFee(uint256 newFeeBps) external onlyOwner {
+        require(newFeeBps >= 50, "Fee too low");
         require(newFeeBps <= 1000, "Fee too high");
         platformFeeBps = newFeeBps;
+        emit PlatformFeeUpdated(newFeeBps);
     }
 
     function setMaxDisputeWindow(uint256 newWindow) external onlyOwner {
         maxDisputeWindow = newWindow;
+        emit MaxDisputeWindowUpdated(newWindow);
     }
 
     function setMinJobDuration(uint256 newDuration) external onlyOwner {
         minJobDuration = newDuration;
+        emit MinJobDurationUpdated(newDuration);
+    }
+
+    function setMinCancelDelay(uint256 newDelay) external onlyOwner {
+        minCancelDelay = newDelay;
+        emit MinCancelDelayUpdated(newDelay);
     }
 
     function getAgentListings(address agent) external view returns (uint256[] memory) {

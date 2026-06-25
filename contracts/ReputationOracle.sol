@@ -47,6 +47,7 @@ contract ReputationOracle is IReputationOracle {
     mapping(address => bool) public registeredProtocols;
 
     event ProtocolRegistered(address indexed protocol, uint256 minScore);
+    event ProtocolDeregistered(address indexed protocol);
     event AgentApproved(address indexed protocol, uint256 indexed agentId, uint256 score);
     event AgentDenied(address indexed protocol, uint256 indexed agentId, uint256 score);
     event MinScoreUpdated(address indexed protocol, uint256 newScore);
@@ -66,14 +67,23 @@ contract ReputationOracle is IReputationOracle {
 
     function registerProtocol(address protocol, uint256 minScore) external onlyOwner {
         require(protocol != address(0), "Invalid protocol address");
+        require(minScore > 0, "Min score must be positive");
         require(minScore <= 1000, "Score exceeds max");
         registeredProtocols[protocol] = true;
         protocolMinScores[protocol] = minScore;
         emit ProtocolRegistered(protocol, minScore);
     }
 
+    function deregisterProtocol(address protocol) external onlyOwner {
+        require(registeredProtocols[protocol], "Protocol not registered");
+        registeredProtocols[protocol] = false;
+        protocolMinScores[protocol] = 0;
+        emit ProtocolDeregistered(protocol);
+    }
+
     function updateMinScore(address protocol, uint256 newScore) external onlyOwner {
         require(registeredProtocols[protocol], "Protocol not registered");
+        require(newScore > 0, "Min score must be positive");
         require(newScore <= 1000, "Score exceeds max");
         protocolMinScores[protocol] = newScore;
         emit MinScoreUpdated(protocol, newScore);
@@ -100,7 +110,7 @@ contract ReputationOracle is IReputationOracle {
     }
 
     function isAgentAuthorizedView(address agentAddress, address protocol)
-        external view returns (bool)
+        external view override returns (bool)
     {
         uint256 agentId = agentIdentity.getAgentByAddress(agentAddress);
         if (agentId == 0) return false;
@@ -115,14 +125,16 @@ contract ReputationOracle is IReputationOracle {
         return agent.reputationScore >= minScore;
     }
 
-    function checkScore(address agentAddress) external view returns (uint256) {
+    // L-03: return 0 instead of reverting for unregistered agents
+    function checkScore(address agentAddress) external view override returns (uint256) {
         uint256 agentId = agentIdentity.getAgentByAddress(agentAddress);
-        require(agentId != 0, "Agent not registered");
+        if (agentId == 0) return 0;
         IAgentIdentity.AgentRecord memory agent = agentIdentity.getAgent(agentId);
         return agent.reputationScore;
     }
 
     function setDefaultMinScore(uint256 newScore) external onlyOwner {
+        require(newScore > 0, "Score must be positive");
         require(newScore <= 1000, "Score exceeds max");
         defaultMinScore = newScore;
         emit DefaultMinScoreUpdated(newScore);

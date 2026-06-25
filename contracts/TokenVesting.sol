@@ -8,8 +8,10 @@ interface IERC20 {
 
 contract TokenVesting {
 
-    address public immutable owner;
+    address public owner;
     IERC20 public immutable aevToken;
+
+    uint256 public constant MAX_VESTING_DURATION = 4 * 365 days;
 
     struct VestingSchedule {
         address beneficiary;
@@ -36,6 +38,7 @@ contract TokenVesting {
     );
     event TokensReleased(uint256 indexed scheduleId, address indexed beneficiary, uint256 amount);
     event ScheduleRevoked(uint256 indexed scheduleId, address indexed beneficiary, uint256 returned);
+    event BeneficiaryChanged(uint256 indexed scheduleId, address indexed oldBeneficiary, address indexed newBeneficiary);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -59,6 +62,7 @@ contract TokenVesting {
         require(beneficiary != address(0), "Invalid beneficiary");
         require(totalAmount > 0, "Amount must be greater than 0");
         require(vestingDuration > 0, "Vesting duration must be greater than 0");
+        require(vestingDuration <= MAX_VESTING_DURATION, "Vesting duration too long");
         require(cliffDuration <= vestingDuration, "Cliff exceeds vesting duration");
         require(
             aevToken.balanceOf(address(this)) >= totalAmount,
@@ -99,12 +103,12 @@ contract TokenVesting {
         uint256 releasable = _releasableAmount(schedule);
         require(releasable > 0, "No tokens to release");
 
-        // Update state before transfer — reentrancy protection
+        // CEI: update state before transfer
         schedule.released += releasable;
 
-        require(aevToken.transfer(schedule.beneficiary, releasable), "Token transfer failed");
-
         emit TokensReleased(scheduleId, schedule.beneficiary, releasable);
+
+        require(aevToken.transfer(schedule.beneficiary, releasable), "Token transfer failed");
     }
 
     function revoke(uint256 scheduleId) external onlyOwner {
@@ -114,9 +118,11 @@ contract TokenVesting {
         uint256 releasable = _releasableAmount(schedule);
         uint256 remaining = schedule.totalAmount - schedule.released - releasable;
 
-        // Update state BEFORE transfers — reentrancy protection
+        // CEI: update state before transfers
         schedule.revoked = true;
         schedule.released += releasable;
+
+        emit ScheduleRevoked(scheduleId, schedule.beneficiary, remaining);
 
         if (releasable > 0) {
             require(aevToken.transfer(schedule.beneficiary, releasable), "Beneficiary transfer failed");
@@ -125,8 +131,22 @@ contract TokenVesting {
         if (remaining > 0) {
             require(aevToken.transfer(owner, remaining), "Owner transfer failed");
         }
+    }
 
-        emit ScheduleRevoked(scheduleId, schedule.beneficiary, remaining);
+    function changeBeneficiary(uint256 scheduleId, address newBeneficiary) external {
+        VestingSchedule storage schedule = schedules[scheduleId];
+        require(
+            msg.sender == schedule.beneficiary || msg.sender == owner,
+            "Not authorized"
+        );
+        require(newBeneficiary != address(0), "Invalid address");
+        require(!schedule.revoked, "Schedule revoked");
+
+        address oldBeneficiary = schedule.beneficiary;
+        schedule.beneficiary = newBeneficiary;
+        beneficiarySchedules[newBeneficiary].push(scheduleId);
+
+        emit BeneficiaryChanged(scheduleId, oldBeneficiary, newBeneficiary);
     }
 
     function releasableAmount(uint256 scheduleId) external view returns (uint256) {
@@ -161,5 +181,11 @@ contract TokenVesting {
         }
 
         return (schedule.totalAmount * elapsed) / schedule.vestingDuration;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
 }
