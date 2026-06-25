@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  const AEV_TOKEN_ADDRESS = "0x3Aecc8b53Fd0Ac659199D0D46e288dEFba908E54";
+  const AEV_TOKEN_ADDRESS = "0x1C47FE8AE5531008Ec57fC60C7498Ebf2c2Ac920";
   const QUORUM = hre.ethers.parseEther("10000000");
 
   const AevumDAO = await hre.ethers.getContractFactory("AevumDAO");

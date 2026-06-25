@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  const AGENT_IDENTITY_ADDRESS = "0xC3128B98b5abB0789aF6283A01244Cf05DcEDB87";
+  const AGENT_IDENTITY_ADDRESS = "0xF6CEc60C9dD6aa283D42fE5D38537303F9bE231B";
 
   const ReputationOracle = await hre.ethers.getContractFactory("ReputationOracle");
   const oracle = await ReputationOracle.deploy(AGENT_IDENTITY_ADDRESS);
