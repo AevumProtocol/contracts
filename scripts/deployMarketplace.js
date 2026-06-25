@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  const ORACLE_ADDRESS = "0xAC903E27b11355b31aB8966AE6ad3701F0331105";
+  const ORACLE_ADDRESS = "0xAda16c3ca238BE164E716F280D3D184269e4A0A9";
 
   const AgentMarketplace = await hre.ethers.getContractFactory("AgentMarketplace");
   const marketplace = await AgentMarketplace.deploy(ORACLE_ADDRESS);

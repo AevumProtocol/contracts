@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  const AEV_TOKEN_ADDRESS = "0x8EB57eeDa655d46A01d54F4359E392c9be1F7F2C";
+  const AEV_TOKEN_ADDRESS = "0x1C47FE8AE5531008Ec57fC60C7498Ebf2c2Ac920";
 
   const TokenVesting = await hre.ethers.getContractFactory("TokenVesting");
   const vesting = await TokenVesting.deploy(AEV_TOKEN_ADDRESS);
