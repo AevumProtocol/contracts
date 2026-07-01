@@ -39,8 +39,8 @@ All contracts are deployed and verified on Ethereum Sepolia testnet.
 
 ## Security
 
-- 10 audit rounds completed: 5 manual reviews, 4 Slither static analysis passes, 1 Claude Opus deep review
-- 0 findings remaining (all HIGH, MEDIUM, LOW resolved)
+- Extensive internal pre-audit hardening: 5 manual reviews, 4 Slither static analysis passes, deep static review
+- Zenith Security professional audit in progress (Mario Poneder + adriro)
 - Professional audit in progress with **Zenith Security** (auditors: Mario Poneder, adriro)
 - Code4rena community audit submitted
 
