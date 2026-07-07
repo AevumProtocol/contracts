@@ -1,6 +1,6 @@
 # Aevum Protocol — Known Limitations & Design Decisions
 **Prepared for:** Zenith Security (Mario Poneder, adriro)  
-**Date:** June 30, 2026  
+**Date:** July 6, 2026 (updated)  
 **Commit:** See SOW commit hash 63f7d568bf814ae23f07559990e0d7f7cb96adc0
 
 ---
@@ -38,6 +38,48 @@ First-time withdrawers bypass the cooldown check because `agentInitialized[addre
 ### 10. AgentMarketplace pull payment for owner fees
 Platform fees accumulate in `pendingFees[owner]` and require a separate `withdrawFees()` call. This is intentional — prevents fee payment failure from bricking job completions.
 
+
+### 11. Oracle trust concentration — V1 reputation scores are ADVISORY
+**This is the most important framing clarification before Zenith kickoff.**
+
+V1 reputation scores are advisory, not trustless. At launch there is a single trusted operator (the deployer). The `ReputationController` multi-oracle architecture exists and is correctly implemented, but with only 2 oracles (deployer + dead address on testnet), the system is operationally centralized.
+
+Do NOT use "multi-oracle consensus" language in marketing or external docs until the operator set genuinely decentralizes. Zenith should evaluate this contract in the context of a single-operator trust model, not a decentralized consensus model.
+
+**V1→V2 transition trigger uses AND logic, not OR.** Multi-oracle consensus only activates when ALL THREE conditions are met simultaneously:
+- (a) 3+ independent operators onboarded
+- (b) Quorum set to require 2-of-3 minimum agreement
+- (c) Each operator active for 30+ days
+
+Time alone cannot trigger the transition. A 6-month timer hitting before operators are onboarded would change the label without changing the reality. The contract is correct — this is an operational framing issue, not a code issue.
+
+### 12. AgentVault exposure cap recommendation
+Until the oracle operator set genuinely distributes beyond a single trusted party, per-agent vault exposure should be treated as carrying concentrated trust risk. Recommended: cap individual agent vault exposure at 1 ETH until V2 oracle decentralization is live.
+
+This limits blast radius if the trust assumption breaks. Flagged to Zenith as a pre-kickoff risk reduction consideration — not a missing feature, just a safety bound appropriate for the V1 trust model.
+
+**Status:** Under evaluation — may add as a configurable owner-settable cap before audit kickoff.
+
+### 13. Sybil resistance gap
+Current `ReputationOracle` accrues score from interaction history without sufficient cost to fake interactions. A stake deposit is necessary but not sufficient — a slashable bond or economically expensive-to-counterfeit activity proof is needed to make sybil farming irrational rather than just expensive.
+
+There is no clean V1 answer to this. The gap is:
+- Stake deposit creates cost to register
+- But repeated self-interactions can inflate score without real counterparty risk
+- Slashable bond (V2) is the correct fix — reputation is only worth what it costs to fake
+
+Flagged explicitly for Zenith as a known architectural gap. V2 roadmap item.
+
+### 14. Oracle operator fail-safe
+`ReputationController` has quorum requirements but no automatic manipulation detection. Manual pause via owner `AccessControl` exists but is reactive, not preventive. If the operator set is small enough that collusion is cheap (as it is in V1 with 2 oracles), quorum alone is insufficient protection against coordinated reputation manipulation.
+
+Mitigating factors in V1: single operator means collusion is moot (there is no second party to collude with). This becomes a real concern at 2-3 operators before genuine decentralization.
+
+### 15. Stake deposit governance-adjustability
+Needs verification: if stake deposit is hardcoded in `AgentIdentity.sol` rather than governance-adjustable, this should be flagged as a V2 addition. A hardcoded deposit amount cannot respond to ETH price changes or evolving sybil resistance requirements.
+
+**Action item:** Verify with `grep -i "stake\|deposit" contracts/AgentIdentity.sol` before Zenith kickoff.
+
 ---
 
 ## Accepted Deferrals (V2)
@@ -63,6 +105,8 @@ These were raised during internal review and explicitly deferred:
 3. **AgentVault accounting** — `totalDeposited` tracking correctness across deposit/withdraw/rescueETH paths.
 4. **AEVToken fee math** — two-step fee calculation: `fee = (amount * feeBps) / 10000` then `burnAmount = (fee * BURN_BPS) / 10000`. Slither flags as divide-before-multiply but these are independent calculations, not chained.
 5. **ERC20Votes integration** — `_update()` override correctness, `getPastVotes()` snapshot consistency.
+6. **Oracle trust concentration** — V1 is single-operator in practice. Evaluate all reputation-gated paths under this assumption, not multi-oracle consensus.
+7. **Sybil resistance** — stake deposit alone does not prevent score inflation via self-interactions. No clean V1 fix. Evaluate blast radius if score is gamed.
 
 ---
 
