@@ -12,6 +12,7 @@ contract AgentVault {
     IReputationOracle public immutable oracle;
 
     uint256 public defaultWithdrawLimit;
+    uint256 public maxAgentExposure = 1 ether; // V1 safety cap — limits blast radius under single-operator trust model
     uint256 public cooldownPeriod = 1 days;
     uint256 public totalDeposited;
 
@@ -30,6 +31,7 @@ contract AgentVault {
     event AgentIdUnblacklisted(uint256 indexed agentId);
     event WithdrawLimitSet(address indexed agent, uint256 limit);
     event DefaultWithdrawLimitUpdated(uint256 newLimit);
+    event MaxAgentExposureUpdated(uint256 newLimit);
     event CooldownPeriodUpdated(uint256 newPeriod);
     event ETHRescued(address indexed owner, uint256 amount);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -59,6 +61,7 @@ contract AgentVault {
 
     function deposit() external payable {
         require(msg.value > 0, "Must send ETH");
+        require(totalDeposited + msg.value <= maxAgentExposure * 1000, "Vault exposure cap reached"); // global cap: 1000x per-agent limit
         totalDeposited += msg.value;
         emit Deposited(msg.sender, msg.value);
     }
@@ -116,6 +119,12 @@ contract AgentVault {
         require(newLimit > 0, "Limit must be positive");
         defaultWithdrawLimit = newLimit;
         emit DefaultWithdrawLimitUpdated(newLimit);
+    }
+
+    function setMaxAgentExposure(uint256 newLimit) external onlyOwner {
+        require(newLimit > 0, "Limit must be positive");
+        maxAgentExposure = newLimit;
+        emit MaxAgentExposureUpdated(newLimit);
     }
 
     function setCooldownPeriod(uint256 newPeriod) external onlyOwner {
