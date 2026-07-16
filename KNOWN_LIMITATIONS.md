@@ -123,3 +123,6 @@ These were raised during internal review and explicitly deferred:
 
 ### 17. AgentVault v1 is a shared treasury, not isolated per-agent capital pools
 AgentVault v1 operates as a reputation-gated shared treasury, not isolated per-agent capital pools. There is no `agentBalance` mapping — agents draw from a shared pool subject to per-transaction limits (`agentWithdrawLimits`), lifetime cumulative withdrawal caps (`agentTotalWithdrawn`), and the `maxAgentExposure` ceiling. Outstanding exposure per agent is not tracked — withdrawn ETH has no settlement or repayment path back to an agent's account. True per-agent balance isolation with deposit assignment, outstanding exposure tracking, and settlement paths is a v2 architectural upgrade. Any marketing language describing "isolated capital pools per agent" reflects the intended v2 design, not current v1 contract behavior.
+
+### 18. Operator independence not cryptographically enforced (addendum to #11)
+Operator independence is not cryptographically enforced in v1. The 2-of-3 quorum security assumption depends entirely on operators being genuinely independent entities. Three keys controlled by the same party collapses to single-operator trust with false decentralization optics. Verification of independence is operational not technical at this stage.
