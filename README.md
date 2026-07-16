@@ -43,7 +43,7 @@ All 8 contracts deployed and verified.
 | **AgentIdentity** | Persistent on-chain identity — strategy hash, execution policy, performance certs |
 | **ReputationOracle** | Auth gateway — checks agent score against protocol thresholds |
 | **ReputationController** | Multi-oracle consensus — requires majority approval for reputation updates |
-| **AgentVault** | ETH treasury gated by reputation — isolated capital per agent |
+| **AgentVault** | Reputation-gated shared treasury with per-agent withdrawal limits |
 | **AgentMarketplace** | Trustless service marketplace — escrow, jobs, dispute resolution, pull-payment fees |
 | **AEVToken** | $AEV — 1B hard cap, 50% fee burn, ERC20Votes for snapshot governance |
 | **TokenVesting** | Time-locked allocations — cliff periods, revocable, 4yr max |
