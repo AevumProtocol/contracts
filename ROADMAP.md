@@ -73,3 +73,19 @@ endpoint operators: **evidence belongs on-chain, scoring belongs off-chain.**
 neutral infrastructure; token-dependent mechanics activate only after real
 economic activity exists to support them. Design inputs credited to the r/ethdev
 and r/LangChain review threads, July 2026.*
+
+## Governance Upgrades (v2)
+
+"$AEV holders control who validates the network, what the certification standard requires, and how protocol revenue gets distributed. The token isn't governance theater — it's ownership of the trust layer itself."
+
+### 1. Governance Controls Validator Admission
+Token holders vote on which validators get admitted to the network. Bad actors can be voted out with stake slashing. Makes every $AEV holder a guardian of the trust layer. Eliminates centralized validator control.
+
+### 2. Governance Controls Certification Standards
+Token holders vote on what market regimes must be covered, how long the forward window is, and what counts as a valid backtest. Governance updates the standard as the market evolves. Makes Aevum future-proof instead of frozen at deploy time.
+
+### 3. Governance Controls Fee Distribution
+Token holders vote on what percentage of certification fees goes to validators vs burns vs treasury. Holders directly control their own economic returns. Makes governance financially meaningful not abstract.
+
+### 4. Conviction Voting (v2 research item)
+Longer you hold $AEV without selling, more voting power accumulates. Rewards long-term believers over speculators. Too complex for pre-audit implementation — research item only for v2.
