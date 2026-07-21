@@ -1,5 +1,5 @@
 # Aevum Protocol — Known Limitations & Design Decisions
-**Prepared for:** Zenith Security (Mario Poneder, adriro)  
+**Prepared for:** Hexens (Kasper Zwijsen)  
 **Date:** July 6, 2026 (updated)  
 **Commit:** See SOW commit hash 63f7d568bf814ae23f07559990e0d7f7cb96adc0
 
@@ -40,11 +40,11 @@ Platform fees accumulate in `pendingFees[owner]` and require a separate `withdra
 
 
 ### 11. Oracle trust concentration — V1 reputation scores are ADVISORY
-**This is the most important framing clarification before Zenith kickoff.**
+**This is the most important framing clarification before Hexens kickoff.**
 
 V1 reputation scores are advisory, not trustless. At launch there is a single trusted operator (the deployer). The `ReputationController` multi-oracle architecture exists and is correctly implemented, but with only 2 oracles (deployer + dead address on testnet), the system is operationally centralized.
 
-Do NOT use "multi-oracle consensus" language in marketing or external docs until the operator set genuinely decentralizes. Zenith should evaluate this contract in the context of a single-operator trust model, not a decentralized consensus model.
+Do NOT use "multi-oracle consensus" language in marketing or external docs until the operator set genuinely decentralizes. Hexens should evaluate this contract in the context of a single-operator trust model, not a decentralized consensus model.
 
 **V1→V2 transition trigger uses AND logic, not OR.** Multi-oracle consensus only activates when ALL THREE conditions are met simultaneously:
 - (a) 3+ independent operators onboarded
@@ -56,7 +56,7 @@ Time alone cannot trigger the transition. A 6-month timer hitting before operato
 ### 12. AgentVault exposure cap recommendation
 Until the oracle operator set genuinely distributes beyond a single trusted party, per-agent vault exposure should be treated as carrying concentrated trust risk. Recommended: cap individual agent vault exposure at 1 ETH until V2 oracle decentralization is live.
 
-This limits blast radius if the trust assumption breaks. Flagged to Zenith as a pre-kickoff risk reduction consideration — not a missing feature, just a safety bound appropriate for the V1 trust model.
+This limits blast radius if the trust assumption breaks. Flagged to Hexens as a pre-kickoff risk reduction consideration — not a missing feature, just a safety bound appropriate for the V1 trust model.
 
 **Status:** Under evaluation — may add as a configurable owner-settable cap before audit kickoff.
 
@@ -68,7 +68,7 @@ There is no clean V1 answer to this. The gap is:
 - But repeated self-interactions can inflate score without real counterparty risk
 - Slashable bond (V2) is the correct fix — reputation is only worth what it costs to fake
 
-Flagged explicitly for Zenith as a known architectural gap. V2 roadmap item.
+Flagged explicitly for Hexens as a known architectural gap. V2 roadmap item.
 
 ### 14. Oracle operator fail-safe
 `ReputationController` has quorum requirements but no automatic manipulation detection. Manual pause via owner `AccessControl` exists but is reactive, not preventive. If the operator set is small enough that collusion is cheap (as it is in V1 with 2 oracles), quorum alone is insufficient protection against coordinated reputation manipulation.
@@ -78,7 +78,7 @@ Mitigating factors in V1: single operator means collusion is moot (there is no s
 ### 15. Stake deposit governance-adjustability
 Needs verification: if stake deposit is hardcoded in `AgentIdentity.sol` rather than governance-adjustable, this should be flagged as a V2 addition. A hardcoded deposit amount cannot respond to ETH price changes or evolving sybil resistance requirements.
 
-**Action item:** Verify with `grep -i "stake\|deposit" contracts/AgentIdentity.sol` before Zenith kickoff.
+**Action item:** Verify with `grep -i "stake\|deposit" contracts/AgentIdentity.sol` before Hexens kickoff.
 
 ---
 

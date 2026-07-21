@@ -1,5 +1,5 @@
 # Aevum Protocol — Mainnet Deployment Runbook
-**Status:** Draft — pending Zenith Security audit completion  
+**Status:** Draft — pending Hexens audit completion  
 **Target:** ETHOnline 2026 (September 4–16)  
 
 ---
@@ -7,7 +7,7 @@
 ## Pre-Deployment Checklist
 
 ### Security
-- [ ] Zenith Security audit complete — all findings resolved
+- [ ] Hexens audit complete — all findings resolved
 - [ ] Final Slither pass on mainnet-targeted code — 0 HIGH/MEDIUM
 - [ ] Code4rena community audit period closed
 - [ ] All audit findings documented and responses written
@@ -184,7 +184,7 @@ If a critical issue is discovered post-deployment:
 2. **Disable vault withdrawals** — `blacklistAgent` on all agents or set `defaultWithdrawLimit` to 0
 3. **Halt marketplace** — `setPlatformFee` to maximum to deter use, or pause via governance
 4. **Do NOT self-destruct** — contracts cannot be destroyed, only neutered via owner functions
-5. Contact Zenith Security for emergency response guidance
+5. Contact Hexens for emergency response guidance
 
 ---
 

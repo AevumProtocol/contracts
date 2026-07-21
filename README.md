@@ -6,7 +6,7 @@ Built for Machines. Owned by Everyone.
 
 [![Website](https://img.shields.io/badge/Website-aevumprotocol.io-blue)](https://aevumprotocol.io)
 [![Demo](https://img.shields.io/badge/Live_Demo-Sepolia-00FFD1)](https://aevum-frontend.vercel.app)
-[![Audit](https://img.shields.io/badge/Audit-Zenith_Security-orange)](https://github.com/AevumProtocol/contracts/blob/main/KNOWN_LIMITATIONS.md)
+[![Audit](https://img.shields.io/badge/Audit-Hexens_Security-orange)](https://github.com/AevumProtocol/contracts/blob/main/KNOWN_LIMITATIONS.md)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 [Website](https://aevumprotocol.io) · [Live Demo](https://aevum-frontend.vercel.app) · [Whitepaper](https://aevumprotocol.io/whitepaper) · [X](https://twitter.com/AevumProtocol) · [Discord](https://discord.gg/wS7NgjTeH)
@@ -54,7 +54,7 @@ All 8 contracts deployed and verified.
 ## Security
 
 - Extensive internal pre-audit hardening: 5 manual reviews + 4 Slither static analysis passes
-- **Zenith Security professional audit in progress** — Mario Poneder + adriro
+- **Hexens professional audit in progress** — Kasper Zwijsen (Head of Audits)
 - Code4rena community audit submitted
 - See [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) for design decisions and accepted deferrals
 - See [`TECHNICAL_DOCS.md`](TECHNICAL_DOCS.md) for full contract documentation
@@ -109,8 +109,8 @@ npx hardhat run scripts/deploy.js --network sepolia
 
 | Phase | Status | Milestone |
 |---|---|---|
-| Phase 0 | ✅ Current | Contracts deployed, demo live, Zenith audit in progress |
-| Phase 1 | 🔜 | Zenith report published, incentivized testnet, $500K raise |
+| Phase 0 | ✅ Current | Contracts deployed, demo live, Hexens audit in progress |
+| Phase 1 | 🔜 | Hexens report published, incentivized testnet, $500K raise |
 | Phase 2 | 📅 | $AEV token launch, DEX listing, ETHOnline 2026 |
 | Phase 3 | 📅 | Mainnet, cross-chain bridges, PolicyGate V2 |
 

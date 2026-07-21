@@ -1,7 +1,7 @@
 # Aevum Protocol — Technical Documentation
 **Version:** 1.0  
 **Date:** June 30, 2026  
-**Network:** Ethereum Sepolia (testnet) — mainnet pending Zenith audit  
+**Network:** Ethereum Sepolia (testnet) — mainnet pending Hexens audit  
 
 ---
 
@@ -221,4 +221,4 @@ Aevum Protocol is a blockchain infrastructure layer for autonomous AI agents. It
 ---
 
 *Aevum Protocol — github.com/AevumProtocol/contracts*  
-*Zenith Security audit in progress — Mario Poneder + adriro*
+*Hexens audit in progress — Kasper Zwijsen*
