@@ -89,3 +89,43 @@ Token holders vote on what percentage of certification fees goes to validators v
 
 ### 4. Conviction Voting (v2 research item)
 Longer you hold $AEV without selling, more voting power accumulates. Rewards long-term believers over speculators. Too complex for pre-audit implementation — research item only for v2.
+
+## Phase 2 — Token Utility Upgrades (decided July 20, 2026)
+
+*Both items make $AEV genuinely yield-bearing and data-valuable, not just a governance token. Post-audit v2 work. Require legal counsel review before implementation.*
+
+### 1. Validator Staking Rewards (v2 priority)
+
+Validators who stake $AEV and attest certificates honestly earn a percentage of every certification fee generated during their attestation window. The more certificates they validate correctly, the more $AEV they earn. Real yield from day one of protocol volume — not speculative price appreciation, actual income from participating in the network.
+
+**Why it matters:** Most tokens give holders nothing to do. Validator staking rewards give $AEV holders a reason to actively participate and earn. Similar to how Ethereum validators earn ETH for securing the network — Aevum validators earn $AEV for securing the trust layer.
+
+**Implementation notes:**
+- Fee split percentage defined in governance (e.g. 30% validators, 20% burns, 50% treasury)
+- Per-validator attestation tracking to distribute rewards proportionally
+- Pull-payment reward claiming to avoid reentrancy
+- Governance controls fee split so it can be adjusted as network matures
+
+**Legal note:** Staking rewards for active network participants is more legally defensible than passive dividends. Validators are providing a service — attestation — and being compensated for it. Confirm with legal counsel at incorporation.
+
+**Timeline:** v2, post-audit. Design before Hexens report lands so it's ready to implement during the mitigation window if scope allows, or immediately post-audit otherwise.
+
+---
+
+### 2. Certified Strategy Data Marketplace (v2 research)
+
+All VBO-certified strategies generate anonymized, aggregated on-chain performance data — regime classifications, win rates across market conditions, drawdown profiles, submission counts. This data is genuinely valuable to hedge funds, capital allocators, copy trading platforms, and quantitative researchers.
+
+$AEV holders vote on pricing and access tiers. Institutions pay $AEV to access premium data products — regime analytics, strategy performance distributions, backtesting benchmarks. Revenue from data sales flows to $AEV stakers proportionally.
+
+**Why it matters:** Nobody else has on-chain certified strategy performance data at scale. Creates a revenue stream separate from certification fees. More certificates = better data = more valuable marketplace. $AEV holders earn direct income from institutional data demand.
+
+**Revenue model:**
+- Basic — free, aggregate stats
+- Professional — $AEV subscription, regime analytics
+- Institutional — custom data pulls, large $AEV payment
+- All payments in $AEV, portion burns, portion to stakers
+
+**Implementation notes:** Phase 1 is off-chain data aggregation with on-chain payment gating. Phase 2 is fully on-chain data access with smart contract subscriptions. Begin design after first 50 certificates are issued.
+
+**Timeline:** v2 research item. Launch as a separate product alongside the core protocol.

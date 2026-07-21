@@ -138,6 +138,8 @@ Aevum Protocol is a blockchain infrastructure layer for autonomous AI agents. It
 - `isWhitelisted` — transfer permission before `enableTransfers()` (separate from fee exclusion)
 
 **Fee math (two independent calculations, not chained):**
+**V2 token utility additions:** validator staking rewards (earn $AEV for honest attestation) and certified strategy data marketplace (institutions pay $AEV for premium performance analytics).
+
 **Token allocations at deployment:**
 - 30% Ecosystem — `_ecosystemWallet`
 - 20% DAO Treasury — `_daoTreasuryWallet`
