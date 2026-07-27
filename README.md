@@ -2,6 +2,8 @@
 
 **The first blockchain infrastructure built for autonomous AI agents.**
 
+**Aevum Protocol Inc. — Delaware C-corporation, incorporated July 2026**
+
 Built for Machines. Owned by Everyone.
 
 [![Website](https://img.shields.io/badge/Website-aevumprotocol.io-blue)](https://aevumprotocol.io)
@@ -124,4 +126,4 @@ MIT
 
 ## Disclaimer
 
-Testnet software under active professional audit. Not yet deployed to mainnet. Not financial advice. $AEV has no monetary value on testnet.
+Testnet software under active professional audit. Not yet deployed to mainnet. Not financial advice. $AEV has no monetary value on testnet. Aevum Protocol Inc. is a Delaware C-corporation incorporated July 20, 2026.

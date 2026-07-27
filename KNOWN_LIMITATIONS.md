@@ -1,6 +1,7 @@
 # Aevum Protocol — Known Limitations & Design Decisions
 **Prepared for:** Hexens (Kasper Zwijsen)  
-**Date:** July 6, 2026 (updated)  
+**Date:** July 20, 2026 (updated)
+**Legal entity:** Aevum Protocol Inc., Delaware C-corp, incorporated July 20, 2026  
 **Commit:** See SOW commit hash 63f7d568bf814ae23f07559990e0d7f7cb96adc0
 
 ---
