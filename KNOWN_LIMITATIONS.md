@@ -127,3 +127,8 @@ AgentVault v1 operates as a reputation-gated shared treasury, not isolated per-a
 
 ### 18. Operator independence not cryptographically enforced (addendum to #11)
 Operator independence is not cryptographically enforced in v1. The 2-of-3 quorum security assumption depends entirely on operators being genuinely independent entities. Three keys controlled by the same party collapses to single-operator trust with false decentralization optics. Verification of independence is operational not technical at this stage.
+
+### 19. Sybil shotgun attack on pre-commitment (VBO)
+The pre-commitment hash prevents post-hoc modification of a single strategy but does not prevent committing 1000 variations, surfacing the winner, and burying the rest. Each commitment costs gas and ties to a registered AgentIdentity — creating a cost floor and a permanent on-chain record of every commitment that identity ever made, including the ones never surfaced. A sophisticated verifier could examine full commitment history rather than just the certificate being presented. However, cost-of-gas is a weak deterrent at scale, and placing the burden of history-checking back on the verifier undermines the system's core value proposition.
+
+Real fix: commitment fee + slashing mechanism — post a bond at commitment time, burn or slash if multiple variations from the same identity are submitted within a scoring window. V2 research item alongside the hybrid reputation model.
