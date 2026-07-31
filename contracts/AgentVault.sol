@@ -6,18 +6,26 @@ interface IReputationOracle {
     function checkScore(address agentAddress) external view returns (uint256);
 }
 
+interface IAgentIdentity {
+    function getAgentByAddress(address agentAddress) external view returns (uint256);
+}
+
 contract AgentVault {
 
     address public owner;
     IReputationOracle public immutable oracle;
+    IAgentIdentity public immutable agentIdentity;
 
     uint256 public defaultWithdrawLimit;
-    uint256 public maxAgentExposure = 1 ether; // V1 safety cap — limits blast radius under single-operator trust model
     uint256 public cooldownPeriod = 1 days;
+    uint256 public withdrawPeriod = 7 days;  // rolling window for period cap
     uint256 public totalDeposited;
+    uint256 public maxAgentExposure = 1 ether;
 
     mapping(address => uint256) public agentWithdrawLimits;
-    mapping(address => uint256) public agentTotalWithdrawn;
+    mapping(address => uint256) public agentTotalWithdrawn;       // lifetime
+    mapping(address => uint256) public agentPeriodWithdrawn;      // rolling window
+    mapping(address => uint256) public agentPeriodStart;          // when current window started
     mapping(address => uint256) public agentLastWithdraw;
     mapping(address => bool) public agentInitialized;
     mapping(address => bool) public blacklisted;
@@ -33,6 +41,7 @@ contract AgentVault {
     event DefaultWithdrawLimitUpdated(uint256 newLimit);
     event MaxAgentExposureUpdated(uint256 newLimit);
     event CooldownPeriodUpdated(uint256 newPeriod);
+    event WithdrawPeriodUpdated(uint256 newPeriod);
     event ETHRescued(address indexed owner, uint256 amount);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -46,22 +55,32 @@ contract AgentVault {
         _;
     }
 
-    constructor(address _oracleAddress, uint256 _defaultWithdrawLimit) {
+    constructor(address _oracleAddress, uint256 _defaultWithdrawLimit, address _agentIdentityAddress) {
         require(_oracleAddress != address(0), "Invalid oracle address");
+        require(_agentIdentityAddress != address(0), "Invalid identity address");
         require(_defaultWithdrawLimit > 0, "Limit must be positive");
         owner = msg.sender;
         oracle = IReputationOracle(_oracleAddress);
+        agentIdentity = IAgentIdentity(_agentIdentityAddress);
         defaultWithdrawLimit = _defaultWithdrawLimit;
     }
 
     receive() external payable {
+        // Fix: apply deposit cap in receive() too
+        require(
+            totalDeposited + msg.value <= maxAgentExposure * 1000,
+            "Vault exposure cap reached"
+        );
         totalDeposited += msg.value;
         emit Deposited(msg.sender, msg.value);
     }
 
     function deposit() external payable {
         require(msg.value > 0, "Must send ETH");
-        require(totalDeposited + msg.value <= maxAgentExposure * 1000, "Vault exposure cap reached"); // global cap: 1000x per-agent limit
+        require(
+            totalDeposited + msg.value <= maxAgentExposure * 1000,
+            "Vault exposure cap reached"
+        );
         totalDeposited += msg.value;
         emit Deposited(msg.sender, msg.value);
     }
@@ -70,6 +89,11 @@ contract AgentVault {
         require(amount > 0, "Amount must be greater than 0");
         require(address(this).balance >= amount, "Insufficient vault balance");
 
+        // Fix: check agent ID blacklist
+        uint256 agentId = agentIdentity.getAgentByAddress(msg.sender);
+        require(agentId != 0, "No registered agent for this address");
+        require(!blacklistedAgentIds[agentId], "Agent ID is blacklisted");
+
         bool authorized = oracle.isAgentAuthorizedView(msg.sender, address(this));
         require(authorized, "Agent not authorized by oracle");
 
@@ -77,9 +101,19 @@ contract AgentVault {
             ? agentWithdrawLimits[msg.sender]
             : defaultWithdrawLimit;
 
-        require(amount <= limit, "Exceeds withdraw limit");
+        require(amount <= limit, "Exceeds per-transaction withdraw limit");
 
-        // Fix cooldown bypass on first withdrawal
+        // Fix: rolling period cap — reset if period expired
+        if (block.timestamp >= agentPeriodStart[msg.sender] + withdrawPeriod) {
+            agentPeriodWithdrawn[msg.sender] = 0;
+            agentPeriodStart[msg.sender] = block.timestamp;
+        }
+        require(
+            agentPeriodWithdrawn[msg.sender] + amount <= limit * 7,
+            "Exceeds weekly withdrawal cap"
+        );
+
+        // Cooldown check
         if (agentInitialized[msg.sender]) {
             require(
                 block.timestamp >= agentLastWithdraw[msg.sender] + cooldownPeriod,
@@ -90,6 +124,7 @@ contract AgentVault {
         agentInitialized[msg.sender] = true;
         agentLastWithdraw[msg.sender] = block.timestamp;
         agentTotalWithdrawn[msg.sender] += amount;
+        agentPeriodWithdrawn[msg.sender] += amount;
         totalDeposited -= amount;
 
         emit Withdrawn(msg.sender, amount);
@@ -103,9 +138,7 @@ contract AgentVault {
             ? address(this).balance - totalDeposited
             : 0;
         require(surplus > 0, "No surplus ETH to rescue");
-
         emit ETHRescued(owner, surplus);
-
         (bool success, ) = payable(owner).call{value: surplus}("");
         require(success, "Rescue failed");
     }
@@ -131,6 +164,12 @@ contract AgentVault {
         require(newPeriod >= 1 hours, "Cooldown too short");
         cooldownPeriod = newPeriod;
         emit CooldownPeriodUpdated(newPeriod);
+    }
+
+    function setWithdrawPeriod(uint256 newPeriod) external onlyOwner {
+        require(newPeriod >= 1 days, "Period too short");
+        withdrawPeriod = newPeriod;
+        emit WithdrawPeriodUpdated(newPeriod);
     }
 
     function blacklistAgent(address agent) external onlyOwner {
@@ -165,6 +204,7 @@ contract AgentVault {
     function getAgentStats(address agent) external view returns (
         uint256 withdrawLimit,
         uint256 totalWithdrawn,
+        uint256 periodWithdrawn,
         uint256 lastWithdraw,
         bool isBlacklisted,
         bool initialized
@@ -172,6 +212,7 @@ contract AgentVault {
         return (
             agentWithdrawLimits[agent] > 0 ? agentWithdrawLimits[agent] : defaultWithdrawLimit,
             agentTotalWithdrawn[agent],
+            agentPeriodWithdrawn[agent],
             agentLastWithdraw[agent],
             blacklisted[agent],
             agentInitialized[agent]

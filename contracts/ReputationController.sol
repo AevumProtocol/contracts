@@ -43,19 +43,27 @@ contract ReputationController {
 
     uint256 public proposalExpiry = 7 days;
     uint256 public minVotingWindow = 1 hours;
+    uint256 public timelockDelay = 24 hours;    // NEW: timelock before execution
+    uint256 public challengeWindow = 12 hours;  // NEW: window to challenge after approval
 
     mapping(address => bool) public authorizedOracles;
     uint256 public oracleCount;
+
+    // NEW: oracle admission timelock
+    mapping(address => uint256) public oracleAdmissionTime;
+    uint256 public oracleMaturityPeriod = 30 days;
 
     struct ReputationProposal {
         uint256 agentId;
         uint256 newScore;
         uint256 approvals;
         uint256 createdAt;
+        uint256 approvedAt;     // NEW: when quorum was reached
+        uint256 executeAfter;   // NEW: earliest execution time (approvedAt + timelockDelay)
         bool executed;
         bool cancelled;
+        bool challenged;        // NEW: challenge flag
         mapping(address => bool) hasApproved;
-        mapping(address => bool) approvedAtTime;
     }
 
     uint256 public proposalCount;
@@ -65,10 +73,14 @@ contract ReputationController {
     event OracleRemoved(address indexed oracle);
     event ProposalCreated(uint256 indexed proposalId, uint256 agentId, uint256 newScore);
     event ProposalApproved(uint256 indexed proposalId, address indexed oracle);
+    event ProposalQueued(uint256 indexed proposalId, uint256 executeAfter);
     event ProposalExecuted(uint256 indexed proposalId, uint256 agentId, uint256 newScore);
     event ProposalCancelled(uint256 indexed proposalId);
+    event ProposalChallenged(uint256 indexed proposalId, address indexed challenger);
     event ProposalExpiryUpdated(uint256 newExpiry);
     event MinVotingWindowUpdated(uint256 newWindow);
+    event TimelockDelayUpdated(uint256 newDelay);
+    event ChallengeWindowUpdated(uint256 newWindow);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -86,6 +98,14 @@ contract ReputationController {
         _;
     }
 
+    modifier oracleMature() {
+        require(
+            block.timestamp >= oracleAdmissionTime[msg.sender] + oracleMaturityPeriod,
+            "Oracle not yet mature: 30 day waiting period"
+        );
+        _;
+    }
+
     constructor(
         address _agentIdentityAddress,
         address _oracle1,
@@ -97,6 +117,8 @@ contract ReputationController {
         agentIdentity = IAgentIdentity(_agentIdentityAddress);
         authorizedOracles[_oracle1] = true;
         authorizedOracles[_oracle2] = true;
+        oracleAdmissionTime[_oracle1] = block.timestamp - 30 days; // bootstrap: founder oracle is immediately mature
+        oracleAdmissionTime[_oracle2] = block.timestamp - 30 days; // bootstrap: second oracle immediately mature
         oracleCount = 2;
         emit OracleAdded(_oracle1);
         emit OracleAdded(_oracle2);
@@ -110,6 +132,7 @@ contract ReputationController {
         require(oracle != address(0), "Invalid address");
         require(!authorizedOracles[oracle], "Already an oracle");
         authorizedOracles[oracle] = true;
+        oracleAdmissionTime[oracle] = block.timestamp; // starts 30-day maturity clock
         oracleCount++;
         emit OracleAdded(oracle);
     }
@@ -125,10 +148,9 @@ contract ReputationController {
     function proposeReputationUpdate(
         uint256 agentId,
         uint256 newScore
-    ) external onlyOracle minimumOracles returns (uint256) {
+    ) external onlyOracle minimumOracles oracleMature returns (uint256) {
         require(newScore <= MAX_SCORE, "Score exceeds max");
 
-        // Enforce score delta limit
         IAgentIdentity.AgentRecord memory agent = agentIdentity.getAgent(agentId);
         uint256 currentScore = agent.reputationScore;
         uint256 delta = newScore > currentScore
@@ -142,22 +164,30 @@ contract ReputationController {
         proposal.newScore = newScore;
         proposal.approvals = 1;
         proposal.createdAt = block.timestamp;
+        proposal.approvedAt = 0;
+        proposal.executeAfter = 0;
         proposal.executed = false;
         proposal.cancelled = false;
+        proposal.challenged = false;
         proposal.hasApproved[msg.sender] = true;
 
         emit ProposalCreated(proposalCount, agentId, newScore);
         return proposalCount;
     }
 
-    function approveProposal(uint256 proposalId) external onlyOracle minimumOracles {
+    function approveProposal(uint256 proposalId) external onlyOracle minimumOracles oracleMature {
         ReputationProposal storage proposal = proposals[proposalId];
         require(!proposal.executed, "Already executed");
         require(!proposal.cancelled, "Proposal cancelled");
+        require(!proposal.challenged, "Proposal challenged");
         require(!proposal.hasApproved[msg.sender], "Already approved");
         require(
             block.timestamp <= proposal.createdAt + proposalExpiry,
             "Proposal expired"
+        );
+        require(
+            block.timestamp >= proposal.createdAt + minVotingWindow,
+            "Voting window not elapsed"
         );
 
         proposal.hasApproved[msg.sender] = true;
@@ -165,12 +195,61 @@ contract ReputationController {
 
         emit ProposalApproved(proposalId, msg.sender);
 
-        if (proposal.approvals >= requiredApprovals()) {
-            require(
-                block.timestamp >= proposal.createdAt + minVotingWindow,
-                "Voting window not elapsed"
-            );
-            _executeProposal(proposalId);
+        // When quorum reached, start timelock - don't execute immediately
+        if (proposal.approvals >= requiredApprovals() && proposal.approvedAt == 0) {
+            proposal.approvedAt = block.timestamp;
+            proposal.executeAfter = block.timestamp + timelockDelay;
+            emit ProposalQueued(proposalId, proposal.executeAfter);
+        }
+    }
+
+    // NEW: anyone can challenge a queued proposal during the challenge window
+    function challengeProposal(uint256 proposalId) external {
+        ReputationProposal storage proposal = proposals[proposalId];
+        require(proposal.approvedAt != 0, "Proposal not yet queued");
+        require(!proposal.executed, "Already executed");
+        require(!proposal.cancelled, "Already cancelled");
+        require(!proposal.challenged, "Already challenged");
+        require(
+            block.timestamp <= proposal.approvedAt + challengeWindow,
+            "Challenge window closed"
+        );
+        // Only owner can adjudicate - challenger flags it, owner resolves
+        require(
+            msg.sender == owner || authorizedOracles[msg.sender],
+            "Not authorized to challenge"
+        );
+        proposal.challenged = true;
+        emit ProposalChallenged(proposalId, msg.sender);
+    }
+
+    function executeProposal(uint256 proposalId) external {
+        ReputationProposal storage proposal = proposals[proposalId];
+        require(proposal.approvals >= requiredApprovals(), "Insufficient approvals");
+        require(!proposal.executed, "Already executed");
+        require(!proposal.cancelled, "Proposal cancelled");
+        require(!proposal.challenged, "Proposal challenged - owner must resolve");
+        require(proposal.executeAfter != 0, "Not yet queued");
+        require(block.timestamp >= proposal.executeAfter, "Timelock not elapsed");
+
+        emit ProposalExecuted(proposalId, proposal.agentId, proposal.newScore);
+        proposal.executed = true;
+        agentIdentity.updateReputation(proposal.agentId, proposal.newScore);
+    }
+
+    function resolveChallenge(uint256 proposalId, bool uphold) external onlyOwner {
+        ReputationProposal storage proposal = proposals[proposalId];
+        require(proposal.challenged, "Not challenged");
+        require(!proposal.executed, "Already executed");
+        if (uphold) {
+            // Challenge upheld - cancel the proposal
+            proposal.cancelled = true;
+            emit ProposalCancelled(proposalId);
+        } else {
+            // Challenge rejected - clear flag, reset timelock
+            proposal.challenged = false;
+            proposal.executeAfter = block.timestamp + timelockDelay;
+            emit ProposalQueued(proposalId, proposal.executeAfter);
         }
     }
 
@@ -184,13 +263,6 @@ contract ReputationController {
         );
         proposal.cancelled = true;
         emit ProposalCancelled(proposalId);
-    }
-
-    function _executeProposal(uint256 proposalId) internal {
-        ReputationProposal storage proposal = proposals[proposalId];
-        proposal.executed = true;
-        emit ProposalExecuted(proposalId, proposal.agentId, proposal.newScore);
-        agentIdentity.updateReputation(proposal.agentId, proposal.newScore);
     }
 
     function hasApproved(uint256 proposalId, address oracle) external view returns (bool) {
@@ -210,6 +282,18 @@ contract ReputationController {
     function setMinVotingWindow(uint256 newWindow) external onlyOwner {
         minVotingWindow = newWindow;
         emit MinVotingWindowUpdated(newWindow);
+    }
+
+    function setTimelockDelay(uint256 newDelay) external onlyOwner {
+        require(newDelay >= 1 hours, "Timelock too short");
+        timelockDelay = newDelay;
+        emit TimelockDelayUpdated(newDelay);
+    }
+
+    function setChallengeWindow(uint256 newWindow) external onlyOwner {
+        require(newWindow >= 1 hours, "Challenge window too short");
+        challengeWindow = newWindow;
+        emit ChallengeWindowUpdated(newWindow);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {

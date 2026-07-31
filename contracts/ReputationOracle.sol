@@ -43,8 +43,19 @@ contract ReputationOracle is IReputationOracle {
 
     uint256 public defaultMinScore = 100;
 
+    // Diminishing returns: max interactions per counterparty that count toward score
+    // Interactions beyond this cap from the same counterparty are ignored
+    uint256 public maxCounterpartyWeight = 5;
+
     mapping(address => uint256) public protocolMinScores;
     mapping(address => bool) public registeredProtocols;
+
+    // Counterparty interaction tracking for diminishing returns
+    // agent => counterparty => interaction count
+    mapping(address => mapping(address => uint256)) public counterpartyInteractions;
+
+    // Score contribution per agent from each counterparty (capped at maxCounterpartyWeight)
+    mapping(address => mapping(address => uint256)) public counterpartyScoreWeight;
 
     event ProtocolRegistered(address indexed protocol, uint256 minScore);
     event ProtocolDeregistered(address indexed protocol);
@@ -52,6 +63,8 @@ contract ReputationOracle is IReputationOracle {
     event AgentDenied(address indexed protocol, uint256 indexed agentId, uint256 score);
     event MinScoreUpdated(address indexed protocol, uint256 newScore);
     event DefaultMinScoreUpdated(uint256 newScore);
+    event CounterpartyInteractionRecorded(address indexed agent, address indexed counterparty, uint256 count);
+    event MaxCounterpartyWeightUpdated(uint256 newWeight);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -87,6 +100,30 @@ contract ReputationOracle is IReputationOracle {
         require(newScore <= 1000, "Score exceeds max");
         protocolMinScores[protocol] = newScore;
         emit MinScoreUpdated(protocol, newScore);
+    }
+
+    // Record a counterparty interaction — called by marketplace or other protocols
+    // Implements diminishing returns: beyond maxCounterpartyWeight interactions,
+    // the same counterparty contributes no additional score weight
+    function recordInteraction(address agent, address counterparty) external {
+        require(registeredProtocols[msg.sender], "Caller not a registered protocol");
+        require(agent != counterparty, "Cannot self-interact");
+
+        counterpartyInteractions[agent][counterparty]++;
+        uint256 count = counterpartyInteractions[agent][counterparty];
+
+        // Diminishing returns: cap weight per counterparty
+        if (count <= maxCounterpartyWeight) {
+            counterpartyScoreWeight[agent][counterparty] = count;
+        }
+        // Beyond cap: weight stays at maxCounterpartyWeight — no additional boost
+
+        emit CounterpartyInteractionRecorded(agent, counterparty, count);
+    }
+
+    // Get effective interaction weight for a counterparty (capped)
+    function getCounterpartyWeight(address agent, address counterparty) external view returns (uint256) {
+        return counterpartyScoreWeight[agent][counterparty];
     }
 
     function isAgentAuthorized(address agentAddress, address protocol) external returns (bool) {
@@ -125,7 +162,6 @@ contract ReputationOracle is IReputationOracle {
         return agent.reputationScore >= minScore;
     }
 
-    // L-03: return 0 instead of reverting for unregistered agents
     function checkScore(address agentAddress) external view override returns (uint256) {
         uint256 agentId = agentIdentity.getAgentByAddress(agentAddress);
         if (agentId == 0) return 0;
@@ -138,6 +174,12 @@ contract ReputationOracle is IReputationOracle {
         require(newScore <= 1000, "Score exceeds max");
         defaultMinScore = newScore;
         emit DefaultMinScoreUpdated(newScore);
+    }
+
+    function setMaxCounterpartyWeight(uint256 newWeight) external onlyOwner {
+        require(newWeight > 0, "Weight must be positive");
+        maxCounterpartyWeight = newWeight;
+        emit MaxCounterpartyWeightUpdated(newWeight);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
