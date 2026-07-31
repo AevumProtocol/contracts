@@ -51,7 +51,7 @@ contract ReputationController {
 
     // NEW: oracle admission timelock
     mapping(address => uint256) public oracleAdmissionTime;
-    uint256 public oracleMaturityPeriod = 30 days;
+    uint256 public constant oracleMaturityPeriod = 30 days;
 
     struct ReputationProposal {
         uint256 agentId;

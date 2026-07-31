@@ -20,7 +20,7 @@ contract VerifiableBacktestOracle {
 
     // Max commitments per identity per window (anti-shotgun)
     uint256 public maxCommitmentsPerWindow = 3;
-    uint256 public windowTrackingPeriod = 30 days;
+    uint256 public constant windowTrackingPeriod = 30 days;
 
     uint256 public certificateCount;
 
@@ -130,6 +130,7 @@ contract VerifiableBacktestOracle {
             "Forward window too long"
         );
         require(msg.value >= commitmentBond, "Insufficient bond");
+        uint256 excess = msg.value - commitmentBond;
 
         // Anti-shotgun: reset counter if outside tracking window
         if (block.timestamp >= identityWindowStart[msg.sender] + windowTrackingPeriod) {
@@ -153,10 +154,16 @@ contract VerifiableBacktestOracle {
             commitTimestamp: block.timestamp,
             windowStart: block.timestamp,
             windowEnd: windowEnd,
-            bondAmount: msg.value,
+            bondAmount: commitmentBond,
             status: CommitmentStatus.Pending,
             certificateId: 0
         });
+
+        // Refund excess ETH
+        if (excess > 0) {
+            (bool refunded, ) = payable(msg.sender).call{value: excess}("");
+            require(refunded, "Excess refund failed");
+        }
 
         emit StrategyCommitted(commitmentCount, msg.sender, strategyHash, windowEnd, msg.value);
         return commitmentCount;
@@ -182,8 +189,10 @@ contract VerifiableBacktestOracle {
         uint256 agentId = agentIdentity.getAgentByAddress(commitment.submitter);
         require(agentId != 0, "Submitter has no registered agent");
 
-        // Mark commitment as revealed
+        // Mark commitment as revealed — zero bond before any external calls (CEI pattern)
         commitment.status = CommitmentStatus.Revealed;
+        uint256 bondToReturn = commitment.bondAmount;
+        commitment.bondAmount = 0;
 
         // Issue certificate
         certificateCount++;
@@ -213,14 +222,17 @@ contract VerifiableBacktestOracle {
         bytes32 certHash = keccak256(abi.encodePacked(certId, commitment.strategyHash, resultsHash));
         agentIdentity.addPerformanceCert(agentId, certHash, metadataURI);
 
-        // Return bond to submitter
-        if (commitment.bondAmount > 0) {
-            (bool success, ) = payable(commitment.submitter).call{value: commitment.bondAmount}("");
+        // Return bond to submitter — zero before transfer (reentrancy protection)
+        if (bondToReturn > 0) {
+            (bool success, ) = payable(commitment.submitter).call{value: bondToReturn}("");
             require(success, "Bond refund failed");
         }
 
+        // Events emitted before bond refund (reentrancy protection)
         emit CommitmentRevealed(commitmentId, resultsHash, returnBps, regime);
         emit CertificateIssued(certId, commitmentId, commitment.submitter, commitment.strategyHash, returnBps, regime);
+
+        // Return bond to submitter - zeroed before transfer above
 
         return certId;
     }
@@ -259,13 +271,19 @@ contract VerifiableBacktestOracle {
         emit AttestorRemoved(attestor);
     }
 
+    event CommitmentBondUpdated(uint256 newBond);
+    event MaxCommitmentsPerWindowUpdated(uint256 newMax);
+    event ForwardWindowLimitsUpdated(uint256 minDays, uint256 maxDays);
+
     function setCommitmentBond(uint256 newBond) external onlyOwner {
         commitmentBond = newBond;
+        emit CommitmentBondUpdated(newBond);
     }
 
     function setMaxCommitmentsPerWindow(uint256 newMax) external onlyOwner {
         require(newMax > 0, "Must allow at least 1");
         maxCommitmentsPerWindow = newMax;
+        emit MaxCommitmentsPerWindowUpdated(newMax);
     }
 
     function setForwardWindowLimits(uint256 minDays, uint256 maxDays) external onlyOwner {
@@ -273,6 +291,7 @@ contract VerifiableBacktestOracle {
         require(maxDays >= minDays, "Max must exceed min");
         minForwardWindow = minDays * 1 days;
         maxForwardWindow = maxDays * 1 days;
+        emit ForwardWindowLimitsUpdated(minDays, maxDays);
     }
 
     function getCertificate(uint256 certId) external view returns (Certificate memory) {
