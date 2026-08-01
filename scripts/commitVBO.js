@@ -2,7 +2,7 @@ const hre = require("hardhat");
 const { ethers } = hre;
 
 async function main() {
-  const VBO_ADDRESS = "DEPLOY_ADDRESS_HERE"; // fill after deployment
+  const VBO_ADDRESS = "0x9dBC2f11E11C64810922B4c68d55DFf1BCA4Dc8d"; // fill after deployment
 
   const STRATEGY_DESCRIPTION = `Aevum VBO Certificate #001 — BTC Smart DCA Bot v1
 Author: Jonathan Quintero, Aevum Protocol Inc.
