@@ -35,6 +35,7 @@ All 8 contracts deployed and verified.
 | ReputationController.sol | [`0x09D6D8Bb81140E8395Af7b6bc954b0Ab053dd121`](https://sepolia.etherscan.io/address/0x09D6D8Bb81140E8395Af7b6bc954b0Ab053dd121) |
 | TokenVesting.sol | [`0x482C01015E7a845BBd923d18eF627D90448b9d2c`](https://sepolia.etherscan.io/address/0x482C01015E7a845BBd923d18eF627D90448b9d2c) |
 | AevumDAO.sol | [`0x11205fdFC73Bc7527C2fDc68E7369fcC1f6144dD`](https://sepolia.etherscan.io/address/0x11205fdFC73Bc7527C2fDc68E7369fcC1f6144dD) |
+| VerifiableBacktestOracle.sol | [`0x9dBC2f11E11C64810922B4c68d55DFf1BCA4Dc8d`](https://sepolia.etherscan.io/address/0x9dBC2f11E11C64810922B4c68d55DFf1BCA4Dc8d) |
 
 ---
 
@@ -50,6 +51,7 @@ All 8 contracts deployed and verified.
 | **AEVToken** | $AEV — 1B hard cap, 50% fee burn, ERC20Votes for snapshot governance |
 | **TokenVesting** | Time-locked allocations — cliff periods, revocable, 4yr max |
 | **AevumDAO** | Token-holder governance — snapshot voting, 48hr timelock, approved target whitelist |
+| **VerifiableBacktestOracle** | On-chain strategy commitment + forward window + attestation + certificate issuance |
 
 ---
 
@@ -71,6 +73,7 @@ All 8 contracts deployed and verified.
 | [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) | Design decisions and accepted deferrals |
 | [`MAINNET_RUNBOOK.md`](MAINNET_RUNBOOK.md) | Step-by-step mainnet deployment checklist |
 | [`POLICYGATE_V2.md`](POLICYGATE_V2.md) | V2 concept — off-chain agent action gating |
+| [`ROADMAP.md`](ROADMAP.md) | Full protocol roadmap — v2 architecture, governance upgrades, token utility |
 | [Whitepaper](https://aevumprotocol.io/whitepaper) | Full protocol whitepaper |
 
 ---
@@ -111,7 +114,7 @@ npx hardhat run scripts/deploy.js --network sepolia
 
 | Phase | Status | Milestone |
 |---|---|---|
-| Phase 0 | ✅ Current | Contracts deployed, demo live, Hexens audit in progress |
+| Phase 0 | ✅ Current | 9 contracts deployed, Certificate #001 committed, Hexens audit in progress |
 | Phase 1 | 🔜 | Hexens report published, incentivized testnet, $500K raise |
 | Phase 2 | 📅 | $AEV token launch, DEX listing, ETHOnline 2026 |
 | Phase 3 | 📅 | Mainnet, cross-chain bridges, PolicyGate V2 |
