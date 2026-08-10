@@ -135,3 +135,12 @@ Real fix: commitment fee + slashing mechanism — post a bond at commitment time
 
 ### 20. Silent abandonment / survivorship bias via non-reveal
 An identity that pre-commits multiple strategies can observe the forward window going against some of them and simply never reveal or settle those variants. If reveal is optional, survivorship bias re-enters through a side door — no detection needed, no double-dip required. Slashing on non-reveal-by-deadline closes this without requiring adversarial proof: bond burns automatically on expiry regardless of whether a violation is proven. Not yet implemented — v2 research item, priority addition to VBO spec.
+
+### 21. VBO Certificate return methodology — TWR vs simple return
+Certificate #001 was originally attested with a raw return of +6.93% (693 bps). This figure includes $22.50 of new capital injected during the measurement window, which inflates returns for any accumulation/DCA strategy — any bot that keeps depositing shows green even through a drawdown.
+
+The correct metric is Time-Weighted Return (TWR), which eliminates the effect of external cash flows so the figure reflects actual strategy performance. TWR for Certificate #001 is +3.82% (382 bps), versus BTC buy-and-hold of +3.72% over the same window — alpha of approximately 10 basis points.
+
+Going forward, all VBO certificates will report TWR as the primary metric alongside: (1) raw value change in USD, (2) capital deployed during window, and (3) net alpha over BTC buy-and-hold. TWR is the institutional standard used by allocators to compare strategies fairly. The on-chain attested results hash reflects the original raw calculation — methodology corrections are applied at the display layer.
+
+Additionally: the window for Certificate #001 ran 8 days (July 31 → August 8), not 7 as labeled. The regime was classified as Neutral (BTC +3.72% during window) rather than Bear — the bot's internal regime state was Bear based on the 200-day MA, but market action during the window was positive.
