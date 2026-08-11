@@ -129,3 +129,22 @@ $AEV holders vote on pricing and access tiers. Institutions pay $AEV to access p
 **Implementation notes:** Phase 1 is off-chain data aggregation with on-chain payment gating. Phase 2 is fully on-chain data access with smart contract subscriptions. Begin design after first 50 certificates are issued.
 
 **Timeline:** v2 research item. Launch as a separate product alongside the core protocol.
+
+## Post-ETHOnline — Phase 3 Additions
+
+### AVA — Aevum Virtual Assistant
+
+A custom AI coding assistant built on the Claude API, pre-loaded with permanent context:
+- All 9 contract ABIs
+- TECHNICAL_DOCS.md
+- KNOWN_LIMITATIONS.md
+- ROADMAP.md
+
+**Deployed at:** `assistant.aevumprotocol.io`
+
+**Goals:**
+- Reduce Claude usage costs for development sessions
+- Onboard new team members instantly without reading 10,000 lines of documentation
+- Give BD partners (Adam, AlgoChains, investors) a way to answer technical questions without developer involvement
+
+**Timeline:** Build after ETHOnline September 4th when first funding check closes.
