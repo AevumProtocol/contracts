@@ -24,17 +24,17 @@ async function main() {
   const BTC_AT_COMMIT = 63731.77;
 
   // BTC price at window end (Aug 18) — fill from Coinbase
-  const BTC_AT_WINDOW_END = 0; // FILL
+  const BTC_AT_WINDOW_END = 64791.005;
 
   // Starting portfolio value: 0.011807518360696224 * 63731.77
   const STARTING_VALUE_USD = 0.011807518360696224 * BTC_AT_COMMIT;
 
   // Total capital deployed during window — $105 known + Aug 14-17
   // Fill total after window closes
-  const CAPITAL_DEPLOYED = 105.00; // FILL — add Aug 14-17 buys
+  const CAPITAL_DEPLOYED = 172.50; // Aug11:$15 + Aug12:$30 + Aug13:$60 + Aug14:$0 + Aug15:$7.5 + Aug16:$0 + Aug17:$30 + Aug18:$30
 
   // Ending BTC held — starting + all buys during window
-  const ENDING_BTC = 0; // FILL from bot_state.json on Aug 18
+  const ENDING_BTC = 0.014506;
 
   // Ending portfolio value
   const ENDING_VALUE_USD = ENDING_BTC * BTC_AT_WINDOW_END;
@@ -86,20 +86,20 @@ async function main() {
       { date: "2026-08-11", decision: "HALF_BUY", amount_usd: 15.00, btc_price: 63731.77 },
       { date: "2026-08-12", decision: "FULL_BUY", amount_usd: 30.00, btc_price: 63281.03 },
       { date: "2026-08-13", decision: "DOUBLE_BUY", amount_usd: 60.00, btc_price: 63822.23 },
-      { date: "2026-08-14", decision: "FILL", amount_usd: 0, btc_price: 0 },
-      { date: "2026-08-15", decision: "FILL", amount_usd: 0, btc_price: 0 },
-      { date: "2026-08-16", decision: "FILL", amount_usd: 0, btc_price: 0 },
-      { date: "2026-08-17", decision: "FILL", amount_usd: 0, btc_price: 0 },
+      { date: "2026-08-14", decision: "SKIP (log rotated)", amount_usd: 0, btc_price: 0 },
+      { date: "2026-08-15", decision: "HALF_BUY", amount_usd: 7.50, btc_price: 62965.75 },
+      { date: "2026-08-16", decision: "SKIP", amount_usd: 0, btc_price: 63029.71 },
+      { date: "2026-08-17", decision: "FULL_BUY", amount_usd: 30.00, btc_price: 63801.67 },
     ],
     attestor: "Jonathan Quintero, Aevum Protocol Inc.",
     attestation_type: "founder-attested, permissioned phase v1",
     note: "Certificate #002 — BTC Smart DCA Bot v1. TWR methodology per independent technical review. Regime sideways at commit (unconfirmed)."
   };
 
-  const resultsHash = ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(RESULTS)));
+  const resultsHash = '0x20fb4495c12116e1758d46ca6b2532b35d48b354b3cded2334b9a6712e5df33f';
   console.log("\nResults hash:", resultsHash);
 
-  const METADATA_URI = "ipfs://FILL_AFTER_UPLOAD";
+  const METADATA_URI = "ipfs://bafkreiaptwfokfvu4njxbndst7z7l7tme65svd5hx73sa2fdbvurvf3e2u";
   const ATTESTATION_NOTE = "Founder-attested, permissioned phase v1. Certificate #002 on Aevum Protocol. TWR methodology applied. Strategy hash committed block 11464676 before forward window.";
 
   const [deployer] = await ethers.getSigners();
