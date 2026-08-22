@@ -154,6 +154,10 @@ contract VerifiableBacktestOracleV2 {
         }
         require(identityCommitmentCount[msg.sender] < maxCommitmentsPerWindow, "Exceeded max commitments per window");
 
+        // CEI: update state BEFORE any external calls
+        identityCommitmentCount[msg.sender]++;
+        commitmentCount++;
+
         // Get Atlas price at commit (optional — graceful fallback if not yet integrated)
         int256 priceAtCommit = 0;
         uint256 priceTimestamp = block.timestamp;
@@ -168,9 +172,6 @@ contract VerifiableBacktestOracleV2 {
             priceTimestamp = priceData.timestamp;
             consensusScore = priceData.consensusScore;
         }
-
-        identityCommitmentCount[msg.sender]++;
-        commitmentCount++;
 
         uint256 windowEnd = block.timestamp + (forwardWindowDays * 1 days);
         uint256 excess = msg.value - commitmentBond;
@@ -226,7 +227,15 @@ contract VerifiableBacktestOracleV2 {
         uint256 agentId = agentIdentity.getAgentByAddress(commitment.submitter);
         require(agentId != 0, "Submitter has no registered agent");
 
-        // Get Atlas price at window end (optional)
+        // CEI: update ALL state BEFORE any external calls
+        commitment.status = CommitmentStatus.Revealed;
+        uint256 bondToReturn = commitment.bondAmount;
+        commitment.bondAmount = 0;
+        certificateCount++;
+        uint256 certId = certificateCount;
+        commitment.certificateId = certId;
+
+        // Get Atlas price at window end (optional) — state already updated above
         int256 priceAtWindowEnd = 0;
         uint256 consensusScoreAtWindowEnd = 0;
 
@@ -239,14 +248,7 @@ contract VerifiableBacktestOracleV2 {
             consensusScoreAtWindowEnd = priceData.consensusScore;
         }
 
-        // CEI: zero bond before external calls
-        commitment.status = CommitmentStatus.Revealed;
-        uint256 bondToReturn = commitment.bondAmount;
-        commitment.bondAmount = 0;
-
-        // Issue certificate
-        certificateCount++;
-        uint256 certId = certificateCount;
+        // Issue certificate — certId already set above in CEI block
 
         certificates[certId] = Certificate({
             id: certId,
@@ -269,8 +271,6 @@ contract VerifiableBacktestOracleV2 {
             attestationNote: attestationNote,
             revoked: false
         });
-
-        commitment.certificateId = certId;
 
         bytes32 certHash = keccak256(abi.encodePacked(certId, commitment.strategyHash, resultsHash));
         agentIdentity.addPerformanceCert(agentId, certHash, metadataURI);
