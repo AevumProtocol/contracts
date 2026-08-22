@@ -14,6 +14,11 @@ module.exports = {
     },
   },
   networks: {
+    mainnet: {
+      url: process.env.MAINNET_RPC_URL || "https://eth-mainnet.g.alchemy.com/v2/" + process.env.ALCHEMY_MAINNET_KEY,
+      accounts: [process.env.DEPLOYER_PRIVATE_KEY],
+      chainId: 1,
+    },
     sepolia: {
       url: "https://eth-sepolia.g.alchemy.com/v2/8T2fc5U66x3BLNv7oDjR5",
       accounts: [process.env.DEPLOYER_PRIVATE_KEY],
