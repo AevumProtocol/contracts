@@ -14,9 +14,9 @@ interface IAgentIdentity {
 ///      appended by the TypeScript SDK — no external contract calls, no ETH fee, minimal gas.
 contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
 
-    // BTC/USD feed ID assigned by Atlas Oracle
-    // Confirm with Leonarda at Atlas — using 0x00000001 from their docs example
-    bytes4 internal constant BTC_USD_FEED_ID = 0x00000001;
+    // BTC/USD feed ID — Atlas Oracle Feed #626, confirmed by Leonarda August 25 2026
+    // 626 decimal = 0x00000272 hex
+    bytes4 internal constant BTC_USD_FEED_ID = 0x00000272;
 
     // Atlas Oracle authorized signer (production key from docs)
     address internal constant ATLAS_SIGNER = 0x59eD4701224fD9e2a85Ef2946c2ab828C1dDC600;
