@@ -13,10 +13,7 @@ async function main() {
   console.log("Network:", hre.network.name);
   console.log("=".repeat(50));
 
-  if (hre.network.name === "mainnet" && ATLAS_ORACLE_MAINNET === "0x0000000000000000000000000000000000000000") {
-    console.error("ERROR: Fill in ATLAS_ORACLE_MAINNET address before deploying to mainnet");
-    process.exit(1);
-  }
+  // Atlas Oracle integrated via PullOracleConsumerStandard — price comes from calldata, no address needed
 
   const addresses = {};
 
@@ -98,7 +95,7 @@ async function main() {
   // 9. VerifiableBacktestOracle v2
   console.log("\n[9/9] Deploying VerifiableBacktestOracle v2...");
   const VBO = await ethers.getContractFactory("VerifiableBacktestOracleV2");
-  const vbo = await VBO.deploy(addresses.AgentIdentity, ATLAS_ORACLE_MAINNET);
+  const vbo = await VBO.deploy(addresses.AgentIdentity); // Atlas price via calldata — no oracle address needed
   await vbo.waitForDeployment();
   addresses.VerifiableBacktestOracle = await vbo.getAddress();
   console.log("✓ VerifiableBacktestOracle v2:", addresses.VerifiableBacktestOracle);
