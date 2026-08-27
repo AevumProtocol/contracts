@@ -14,7 +14,7 @@ require('dotenv').config();
 const hre = require("hardhat");
 const { ethers } = hre;
 
-const VBO_V2_ADDRESS = "DEPLOY_VBO_V2_FIRST"; // Update after deploying VBO v2
+const VBO_V2_ADDRESS = "0xEfFa92f77424d733b0f0FFD03caF98D01583cd05"; // Update after deploying VBO v2
 const ATLAS_API_KEY = process.env.ATLAS_API_KEY;
 const BTC_USD_FEED_ID = "626"; // Atlas feed #626, confirmed by Leonarda Aug 25 2026
 
