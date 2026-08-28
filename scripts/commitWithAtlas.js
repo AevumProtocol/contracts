@@ -1,11 +1,6 @@
 /**
  * commitWithAtlas.js — VBO v2 strategy commitment with Atlas Oracle pull price
- * 
- * Atlas pull mode: fetches signed BTC/USD price payload from Atlas API,
- * appends it to transaction calldata. VBO v2 inherits PullOracleConsumerStandard
- * which verifies the Atlas signature on-chain.
- * 
- * Calldata format: [function selector + params] + [payload] + [signature] + [magicMarker]
+ * Uses the official @atlas-oracle/pull-oracle-consumer-sdk
  * 
  * Run: npx hardhat run scripts/commitWithAtlas.js --network sepolia
  */
@@ -13,10 +8,11 @@
 require('dotenv').config();
 const hre = require("hardhat");
 const { ethers } = hre;
+const { PullOracleConsumerClient } = require('@atlas-oracle/pull-oracle-consumer-sdk');
 
-const VBO_V2_ADDRESS = "0xEfFa92f77424d733b0f0FFD03caF98D01583cd05"; // Update after deploying VBO v2
+const VBO_V2_ADDRESS = "0xEfFa92f77424d733b0f0FFD03caF98D01583cd05";
 const ATLAS_API_KEY = process.env.ATLAS_API_KEY;
-const BTC_USD_FEED_ID = "626"; // Atlas feed #626, confirmed by Leonarda Aug 25 2026
+const BTC_USD_FEED_ID = "626"; // Atlas feed #626 — confirmed by Leonarda Aug 25 2026
 
 const STRATEGY_DESCRIPTION = `BTC Smart DCA Bot v2 — Atlas Price Attested
 Exchange: Coinbase Advanced Trade
@@ -27,30 +23,25 @@ Version: 2.0`;
 
 const FORWARD_WINDOW_DAYS = 7;
 
-async function fetchAtlasPayload() {
-  console.log("Fetching Atlas BTC/USD signed price payload...");
-  const response = await fetch('https://api.atlasoracle.io/report/v1/price/latest', {
-    method: 'POST',
-    headers: { 'X-API-KEY': ATLAS_API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ feedIds: [BTC_USD_FEED_ID], signed: true })
-  });
-  const data = await response.json();
-  if (data.status.error_code !== "0") throw new Error(`Atlas API error: ${data.status.error_message}`);
-  
-  const { payload, signature, magicMarker, parsedPayload, consensusScores } = data.data;
-  const parsed = JSON.parse(parsedPayload)[0];
-  const price = Number(parsed.price) / 1e18;
-  const cs = consensusScores[0];
-  
-  console.log(`BTC/USD: $${price.toFixed(2)}`);
-  console.log(`ConsensusScore: ${cs.consensusScore} (${cs.consensusStatus})`);
-  console.log(`Timestamp: ${new Date(Number(parsed.timestampSeconds) * 1000).toISOString()}`);
+// ethers string ABI for contract reads
+const VBO_ABI_ETHERS = [
+  "function commitStrategy(bytes32 strategyHash, uint256 forwardWindowDays) external payable returns (uint256)",
+  "function commitmentBond() view returns (uint256)",
+];
 
-  // Assemble Atlas calldata suffix: payload + signature + magicMarker
-  // Strip 0x from each and concatenate
-  const atlasSuffix = payload.slice(2) + signature.slice(2) + magicMarker.slice(2);
-  return { atlasSuffix, price, consensusScore: cs.consensusScore };
-}
+// viem-compatible ABI for Atlas SDK
+const VBO_ABI = [
+  {
+    name: "commitStrategy",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "strategyHash", type: "bytes32" },
+      { name: "forwardWindowDays", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+];
 
 async function main() {
   const [deployer] = await ethers.getSigners();
@@ -60,36 +51,51 @@ async function main() {
   const strategyHash = ethers.keccak256(ethers.toUtf8Bytes(STRATEGY_DESCRIPTION));
   console.log("Strategy hash:", strategyHash);
 
-  const { atlasSuffix, price, consensusScore } = await fetchAtlasPayload();
+  // Initialize Atlas SDK
+  const client = new PullOracleConsumerClient({
+    http: { apiKey: ATLAS_API_KEY },
+    validate: true,
+    maxDelay: 300,
+    maxFutureDrift: 60,
+    maxPackageCount: 10,
+  });
 
-  const VBO_ABI = [
-    "function commitStrategy(bytes32 strategyHash, uint256 forwardWindowDays) external payable returns (uint256)",
-    "function commitmentBond() view returns (uint256)",
-  ];
+  // Fetch Atlas signed price payload
+  console.log("\nFetching Atlas BTC/USD signed price payload...");
+  const priceData = await client.fetchPrices([BTC_USD_FEED_ID]);
+  console.log("Atlas extraData received:", priceData.extraData.slice(0, 20) + "...");
 
-  const vbo = new ethers.Contract(VBO_V2_ADDRESS, VBO_ABI, deployer);
+  // Parse price for logging
+  const vbo = new ethers.Contract(VBO_V2_ADDRESS, VBO_ABI_ETHERS, deployer);
   const bond = await vbo.commitmentBond();
 
-  // Encode the function call
-  const iface = new ethers.Interface(VBO_ABI);
-  const encodedCall = iface.encodeFunctionData("commitStrategy", [strategyHash, FORWARD_WINDOW_DAYS]);
-
-  // Append Atlas signed price payload to calldata
-  const fullCalldata = encodedCall + atlasSuffix;
+  // Build calldata using SDK
+  const calldata = client.buildCalldata({
+    abi: VBO_ABI,
+    functionName: "commitStrategy",
+    args: [strategyHash, BigInt(FORWARD_WINDOW_DAYS)],
+    extraData: priceData.extraData,
+  });
 
   console.log("\nSending transaction with Atlas price appended to calldata...");
-  const tx = await deployer.sendTransaction({
+
+  // Send transaction with Atlas extraData appended
+  const chainAdapter = {
+    async sendTransaction({ to, data, value }) {
+      const tx = await deployer.sendTransaction({ to, data, value: value ?? 0n });
+      return tx.hash;
+    }
+  };
+
+  const txHash = await client.sendTransaction({
     to: VBO_V2_ADDRESS,
-    data: fullCalldata,
+    data: calldata,
+    chainAdapter,
     value: bond,
   });
 
-  const receipt = await tx.wait();
   console.log("\n✓ Strategy committed with Atlas price attestation");
-  console.log("Tx:", tx.hash);
-  console.log("Block:", receipt.blockNumber);
-  console.log("BTC/USD at commit: $" + price.toFixed(2));
-  console.log("ConsensusScore:", consensusScore);
+  console.log("Tx:", txHash);
   console.log("Strategy hash:", strategyHash);
   console.log("Window closes:", new Date(Date.now() + FORWARD_WINDOW_DAYS * 86400 * 1000).toISOString());
   console.log("\nSave this strategy description — needed for attestation:\n");
