@@ -1,5 +1,5 @@
 # PolicyGate — Aevum Protocol V2 Concept
-**Status:** Concept document — do NOT build before Zenith audit clears  
+**Status:** Concept document — do NOT build before Hexens audit clears  
 **Target:** ETHOnline 2026 differentiator / roadmap item  
 **Date:** June 30, 2026  
 
@@ -69,7 +69,7 @@ This can be served by a lightweight indexer watching ApprovalGranted events.
 ## New Contract — PolicyGate.sol (V2, do not build yet)
 
 ```solidity
-// Conceptual interface only — not for implementation before Zenith clears
+// Conceptual interface only — not for implementation before Hexens clears
 
 interface IPolicyGate {
     struct ApprovalRequest {
@@ -124,7 +124,7 @@ This positions Aevum as infrastructure for **all** AI agent actions, not just De
 
 ---
 
-## Why Not Build It Before Zenith
+## Why Not Build It Before Hexens
 
 1. Expanding contract scope before professional audit = expanding audit scope = higher cost + longer timeline
 2. PolicyGate integrates with ReputationOracle and AgentIdentity — any changes to those during audit would invalidate PolicyGate
@@ -136,7 +136,7 @@ This positions Aevum as infrastructure for **all** AI agent actions, not just De
 
 | Milestone | Target |
 |---|---|
-| Zenith audit complete | Aug 2026 |
+| Hexens audit complete | Aug 2026 |
 | V1 mainnet deployment | Sept 4–16 (ETHOnline) |
 | PolicyGate spec finalized | Oct 2026 |
 | PolicyGate audit | Nov 2026 |

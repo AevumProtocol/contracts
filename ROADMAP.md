@@ -11,8 +11,20 @@ direction informed by operator and integrator feedback during the v1 audit cycle
 - [x] Internal pre-audit hardening (5 manual reviews, 4 Slither passes, 1 deep static analysis)
 - [x] Live demo frontend — aevum-frontend.vercel.app
 - [x] Technical documentation, known limitations, mainnet runbook published
-- [ ] Zenith Security professional audit (contracted, kickoff pending)
+- [ ] Hexens professional audit (contracted, Kasper Zwijsen Head of Audits — audited EigenLayer, Lido, LayerZero — restarts at first investment check)
 - [ ] Audit findings remediation + mitigation review
+
+## Deployed — Ethereum Sepolia (Live)
+
+- [x] **Agent Identity Layer** — on-chain identity for AI agents. Reputation scoring, execution policies, performance certificates. Contract: `0xF6CEc60C9dD6aa283D42fE5D38537303F9bE231B`
+- [x] **Verifiable Backtest Oracle (VBO)** — cryptographic proof that a trading strategy was defined before its forward test window. Atlas Oracle pull mode integration. Contract: `0x9dBC2f11E11C64810922B4c68d55DFf1BCA4Dc8d`
+- [x] **Reputation Oracle v2** — multi-oracle consensus, diminishing returns per counterparty. Contract: `0xa1d354A6f0960d394da6E5f68Bdb8BE4cfE543A7`
+- [x] **Agent Vault v3** — reputation-gated shared treasury, rolling withdrawal cap, blacklist. Contract: `0x86D741407E2Df0400AbE2BB8E8E5075BA10E409d`
+- [x] **Agent Marketplace** — permissionless marketplace, escrow, dispute resolution. Contract: `0xff7A5eBb3ab2C1E92A58B7b6F25CCB6588785Af9`
+- [x] **$AEV Token** — ERC-20, 1B hard cap. Contract: `0x1C47FE8AE5531008Ec57fC60C7498Ebf2c2Ac920`
+- [x] **Token Vesting** — founder vesting 4yr/1yr cliff. Contract: `0x482C01015E7a845BBd923d18eF627D90448b9d2c`
+- [x] **AevumDAO** — governance. Contract: `0x11205fdFC73Bc7527C2fDc68E7369fcC1f6144dD`
+- [x] **VBO v2 with Atlas Oracle** — Atlas PullOracleConsumerStandard inheritance, on-chain price verification. Contract: `0xEfFa92f77424d733b0f0FFD03caF98D01583cd05`
 
 ## Phase 1 — Mainnet (ETHOnline 2026, September 4–16)
 
