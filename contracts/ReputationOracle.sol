@@ -41,7 +41,7 @@ contract ReputationOracle is IReputationOracle {
     address public owner;
     IAgentIdentity public immutable agentIdentity;
 
-    uint256 public defaultMinScore = 100;
+    uint256 public defaultMinScore = 250;  // Fix P1: raised from 100 to prevent immediate authorization of new agents
 
     // Diminishing returns: max interactions per counterparty that count toward score
     // Interactions beyond this cap from the same counterparty are ignored

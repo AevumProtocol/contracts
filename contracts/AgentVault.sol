@@ -28,7 +28,10 @@ contract AgentVault {
     mapping(address => uint256) public agentPeriodStart;          // when current window started
     mapping(address => uint256) public agentLastWithdraw;
     mapping(address => bool) public agentInitialized;
+    mapping(address => uint256) public agentBalance;  // Fix Critical.01: per-agent deposit tracking
+    mapping(address => bool) public agentWithdrawPaused;  // Fix High.01: per-agent pause
     mapping(address => bool) public blacklisted;
+    bool public withdrawPaused;  // Fix High.01: global pause flag
     mapping(uint256 => bool) public blacklistedAgentIds;
 
     event Deposited(address indexed sender, uint256 amount);
@@ -72,6 +75,7 @@ contract AgentVault {
             "Vault exposure cap reached"
         );
         totalDeposited += msg.value;
+        agentBalance[msg.sender] += msg.value;  // Fix Critical.01
         emit Deposited(msg.sender, msg.value);
     }
 
@@ -82,6 +86,7 @@ contract AgentVault {
             "Vault exposure cap reached"
         );
         totalDeposited += msg.value;
+        agentBalance[msg.sender] += msg.value;  // Fix Critical.01
         emit Deposited(msg.sender, msg.value);
     }
 
@@ -93,6 +98,13 @@ contract AgentVault {
         uint256 agentId = agentIdentity.getAgentByAddress(msg.sender);
         require(agentId != 0, "No registered agent for this address");
         require(!blacklistedAgentIds[agentId], "Agent ID is blacklisted");
+
+        // Fix Critical.01: must have deposited to withdraw
+        require(agentBalance[msg.sender] >= amount, "Insufficient agent balance");
+
+        // Fix High.01: check pause flags
+        require(!withdrawPaused, "Withdrawals globally paused");
+        require(!agentWithdrawPaused[msg.sender], "Withdrawals paused for this agent");
 
         bool authorized = oracle.isAgentAuthorizedView(msg.sender, address(this));
         require(authorized, "Agent not authorized by oracle");
@@ -125,6 +137,7 @@ contract AgentVault {
         agentLastWithdraw[msg.sender] = block.timestamp;
         agentTotalWithdrawn[msg.sender] += amount;
         agentPeriodWithdrawn[msg.sender] += amount;
+        agentBalance[msg.sender] -= amount;  // Fix Critical.01
         totalDeposited -= amount;
 
         emit Withdrawn(msg.sender, amount);
@@ -144,14 +157,23 @@ contract AgentVault {
     }
 
     function setWithdrawLimit(address agent, uint256 limit) external onlyOwner {
+        // Fix High.01: zero limit blocks agent withdrawals
         agentWithdrawLimits[agent] = limit;
         emit WithdrawLimitSet(agent, limit);
     }
 
     function setDefaultWithdrawLimit(uint256 newLimit) external onlyOwner {
-        require(newLimit > 0, "Limit must be positive");
+        // Fix High.01: zero is valid — creates global pause via limit
         defaultWithdrawLimit = newLimit;
         emit DefaultWithdrawLimitUpdated(newLimit);
+    }
+
+    function setWithdrawPaused(bool paused) external onlyOwner {
+        withdrawPaused = paused;  // Fix High.01: single-call global halt
+    }
+
+    function setAgentWithdrawPaused(address agent, bool paused) external onlyOwner {
+        agentWithdrawPaused[agent] = paused;  // Fix High.01: per-agent pause
     }
 
     function setMaxAgentExposure(uint256 newLimit) external onlyOwner {

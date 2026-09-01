@@ -25,6 +25,7 @@ contract TokenVesting {
     }
 
     uint256 public scheduleCount;
+    uint256 public totalCommitted;  // Fix P1: track total committed tokens to prevent over-allocation
     mapping(uint256 => VestingSchedule) public schedules;
     mapping(address => uint256[]) public beneficiarySchedules;
 
@@ -64,10 +65,12 @@ contract TokenVesting {
         require(vestingDuration > 0, "Vesting duration must be greater than 0");
         require(vestingDuration <= MAX_VESTING_DURATION, "Vesting duration too long");
         require(cliffDuration <= vestingDuration, "Cliff exceeds vesting duration");
+        // Fix P1: check available balance minus already committed tokens
         require(
-            aevToken.balanceOf(address(this)) >= totalAmount,
-            "Insufficient token balance in vesting contract"
+            aevToken.balanceOf(address(this)) >= totalCommitted + totalAmount,
+            "Insufficient uncommitted token balance"
         );
+        totalCommitted += totalAmount;
 
         scheduleCount++;
         schedules[scheduleCount] = VestingSchedule({
@@ -105,6 +108,7 @@ contract TokenVesting {
 
         // CEI: update state before transfer
         schedule.released += releasable;
+        totalCommitted -= releasable;  // Fix P1: reduce committed on release
 
         emit TokensReleased(scheduleId, schedule.beneficiary, releasable);
 
@@ -120,7 +124,9 @@ contract TokenVesting {
 
         // CEI: update state before transfers
         schedule.revoked = true;
+        totalCommitted -= (schedule.totalAmount - schedule.released);  // Fix P1: free uncommitted on revoke
         schedule.released += releasable;
+        totalCommitted -= releasable;  // Fix P1: reduce committed on release
 
         emit ScheduleRevoked(scheduleId, schedule.beneficiary, remaining);
 

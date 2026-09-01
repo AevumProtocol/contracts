@@ -84,6 +84,12 @@ async function main() {
   addresses.TokenVesting = await tokenVesting.getAddress();
   console.log("✓ TokenVesting:", addresses.TokenVesting);
 
+  // Whitelist TokenVesting in AEVToken
+  const aevTokenContract = await ethers.getContractAt("AEVToken", addresses.AEVToken);
+  await (await aevTokenContract.excludeFromFee(addresses.TokenVesting)).wait();
+  await (await aevTokenContract.setWhitelisted(addresses.TokenVesting, true)).wait();
+  console.log("✓ TokenVesting whitelisted in AEVToken");
+
   // 8. AevumDAO
   console.log("\n[8/9] Deploying AevumDAO...");
   const AevumDAO = await ethers.getContractFactory("AevumDAO");
