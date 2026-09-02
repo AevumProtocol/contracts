@@ -1,7 +1,7 @@
 # Aevum Protocol — Technical Documentation
 **Version:** 1.0  
 **Date:** June 30, 2026  
-**Network:** Ethereum Sepolia (testnet) — mainnet pending Hexens audit  
+**Network:** Ethereum Sepolia (testnet) — mainnet launch September 4, 2026  
 
 ---
 
@@ -221,4 +221,4 @@ Aevum Protocol is a blockchain infrastructure layer for autonomous AI agents. It
 ---
 
 *Aevum Protocol — github.com/AevumProtocol/contracts*  
-*Hexens audit in progress — Kasper Zwijsen*
+*Professional audit scoped with Hexens (Kasper Zwijsen, Head of Audits). Audit on hold pending funding. No third-party audit has been completed. Internal review only: 5 manual passes, 4 Slither passes, Claude Opus source review.*

@@ -1,5 +1,5 @@
 # Aevum Protocol — Mainnet Deployment Runbook
-**Status:** Draft — pending Hexens audit completion  
+**Status:** Active — September 4, 2026 mainnet launch. Professional audit on hold pending funding.  
 **Target:** ETHOnline 2026 (September 4–16)  
 
 ---
@@ -7,7 +7,7 @@
 ## Pre-Deployment Checklist
 
 ### Security
-- [ ] Hexens audit complete — all findings resolved
+- [ ] Internal security review complete (5 manual passes, 4 Slither passes, AuditAid findings fixed)
 - [ ] Final Slither pass on mainnet-targeted code — 0 HIGH/MEDIUM
 - [ ] Code4rena community audit period closed
 - [ ] All audit findings documented and responses written

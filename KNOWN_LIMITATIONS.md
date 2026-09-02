@@ -1,5 +1,5 @@
 # Aevum Protocol — Known Limitations & Design Decisions
-**Prepared for:** Hexens (Kasper Zwijsen)  
+**Prepared for:** Public disclosure — investors, partners, and users  
 **Date:** July 20, 2026 (updated)
 **Legal entity:** Aevum Protocol Inc., Delaware C-corp, incorporated July 20, 2026  
 **Commit:** See SOW commit hash 63f7d568bf814ae23f07559990e0d7f7cb96adc0
@@ -41,7 +41,7 @@ Platform fees accumulate in `pendingFees[owner]` and require a separate `withdra
 
 
 ### 11. Oracle trust concentration — V1 reputation scores are ADVISORY
-**This is the most important framing clarification before Hexens kickoff.**
+**Important framing clarification:**
 
 V1 reputation scores are advisory, not trustless. At launch there is a single trusted operator (the deployer). The `ReputationController` multi-oracle architecture exists and is correctly implemented, but with only 2 oracles (deployer + dead address on testnet), the system is operationally centralized.
 
@@ -79,7 +79,7 @@ Mitigating factors in V1: single operator means collusion is moot (there is no s
 ### 15. Stake deposit governance-adjustability
 Needs verification: if stake deposit is hardcoded in `AgentIdentity.sol` rather than governance-adjustable, this should be flagged as a V2 addition. A hardcoded deposit amount cannot respond to ETH price changes or evolving sybil resistance requirements.
 
-**Action item:** Verify with `grep -i "stake\|deposit" contracts/AgentIdentity.sol` before Hexens kickoff.
+**Verified:** Stake deposit amount is set in constructor and not governance-adjustable in v1. V2 roadmap item.
 
 ---
 
