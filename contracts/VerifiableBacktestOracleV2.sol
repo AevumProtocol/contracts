@@ -27,6 +27,7 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
     uint256 internal constant MAX_PACKAGE_COUNT = 10;
 
     address public owner;
+    bool private _locked; // M-06: reentrancy guard
     IAgentIdentity public immutable agentIdentity;
 
     uint256 public commitmentBond = 0.001 ether;
@@ -71,6 +72,7 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
         // Atlas-verified prices (18 decimals)
         uint256 priceAtCommit;
         uint256 priceAtWindowEnd;
+        bool atlasVerified;  // H-04: true if both commit and attest prices came from Atlas Oracle
         uint256 submissionCount;
         string metadataURI;
         string attestationNote;
@@ -107,6 +109,12 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() { require(msg.sender == owner, "Not owner"); _; }
+    modifier nonReentrant() {
+        require(!_locked, "ReentrancyGuard: reentrant call");
+        _locked = true;
+        _;
+        _locked = false;
+    }
     modifier onlyAttestor() { require(approvedAttestors[msg.sender], "Not approved attestor"); _; }
 
     // ─── Atlas Oracle hook overrides ───────────────────────────────────────────
@@ -144,6 +152,10 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
         require(forwardWindowDays * 1 days >= minForwardWindow, "Window too short");
         require(forwardWindowDays * 1 days <= maxForwardWindow, "Window too long");
         require(msg.value >= commitmentBond, "Insufficient bond");
+
+        // Fix M-01: check agent registration at commit time, not just at attest time
+        // Prevents users from bonding ETH they can never recover via attestation
+        require(agentIdentity.getAgentByAddress(msg.sender) != 0, "Must register agent before committing");
 
         // Anti-shotgun: max 3 commitments per 30-day window
         if (block.timestamp >= identityWindowStart[msg.sender] + windowTrackingPeriod) {
@@ -201,7 +213,7 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
         RegimeType regime,
         string calldata metadataURI,
         string calldata attestationNote
-    ) external payable onlyAttestor returns (uint256) {
+    ) external onlyAttestor returns (uint256) {  // L-06: not payable, no ETH needed
         Commitment storage commitment = commitments[commitmentId];
         require(commitment.submitter != address(0), "Commitment not found");
         require(commitment.status == CommitmentStatus.Pending, "Not pending");
@@ -240,6 +252,7 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
             returnBps: returnBps,
             priceAtCommit: commitment.priceAtCommit,
             priceAtWindowEnd: priceAtWindowEnd,
+            atlasVerified: (commitment.priceAtCommit != 0 && priceAtWindowEnd != 0),  // H-04
             submissionCount: identityCommitmentCount[commitment.submitter],
             metadataURI: metadataURI,
             attestationNote: attestationNote,

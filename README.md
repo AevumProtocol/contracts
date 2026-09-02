@@ -1,132 +1,63 @@
-# Aevum Protocol
+# Aevum Protocol — Smart Contracts
 
-**The first blockchain infrastructure built for autonomous AI agents.**
+On-chain infrastructure for certifying trading strategy integrity. The Verifiable Backtest Oracle (VBO) issues cryptographic certificates proving a trading strategy was defined before its forward test window — making look-ahead bias and cherry-picking cryptographically impossible.
 
-**Aevum Protocol Inc. — Delaware C-corporation, incorporated July 2026**
+## Deployed Contracts — Ethereum Sepolia Testnet
 
-Built for Machines. Owned by Everyone.
+### VBO Core (Mainnet launch: September 4, 2026)
 
-[![Website](https://img.shields.io/badge/Website-aevumprotocol.io-blue)](https://aevumprotocol.io)
-[![Demo](https://img.shields.io/badge/Live_Demo-Sepolia-00FFD1)](https://aevum-frontend.vercel.app)
-[![Audit](https://img.shields.io/badge/Audit-Hexens_Security-orange)](https://github.com/AevumProtocol/contracts/blob/main/KNOWN_LIMITATIONS.md)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+| Contract | Address | Description |
+|---|---|---|
+| AgentIdentity | `0xF6CEc60C9dD6aa283D42fE5D38537303F9bE231B` | On-chain agent identity and certificate registry |
+| ReputationOracle v2 | `0xa1d354A6f0960d394da6E5f68Bdb8BE4cfE543A7` | Multi-oracle reputation consensus |
+| ReputationController v2 | `0x81821ed809CDf44f487bb66f9d531658404D57aB` | 24hr timelock, challenge window |
+| VBO v1 | `0x9dBC2f11E11C64810922B4c68d55DFf1BCA4Dc8d` | Verifiable Backtest Oracle v1 |
+| VBO v2 (Atlas Oracle) | `0xEfFa92f77424d733b0f0FFD03caF98D01583cd05` | VBO with Atlas Oracle pull-mode price attestation |
 
-[Website](https://aevumprotocol.io) · [Live Demo](https://aevum-frontend.vercel.app) · [Whitepaper](https://aevumprotocol.io/whitepaper) · [X](https://twitter.com/AevumProtocol) · [Discord](https://discord.gg/wS7NgjTeH)
+### Supporting Contracts (Post-funding deployment)
 
----
+| Contract | Address | Description |
+|---|---|---|
+| AgentVault v3 | `0x86D741407E2Df0400AbE2BB8E8E5075BA10E409d` | Reputation-gated shared treasury |
+| AgentMarketplace | `0xff7A5eBb3ab2C1E92A58B7b6F25CCB6588785Af9` | Permissionless agent services marketplace |
+| AEVToken | `0x1C47FE8AE5531008Ec57fC60C7498Ebf2c2Ac920` | Protocol governance token |
+| TokenVesting | `0x482C01015E7a845BBd923d18eF627D90448b9d2c` | Founder vesting 4yr/1yr cliff |
+| AevumDAO | `0x11205fdFC73Bc7527C2fDc68E7369fcC1f6144dD` | On-chain governance |
 
-## Overview
-
-AI agents today operate on infrastructure built for humans — no native identity, no verifiable reputation, no safe way to hold funds, no trustless way to get paid. Aevum Protocol is a set of smart contracts that gives autonomous agents persistent on-chain identity, reputation scoring, treasury access, and a trustless marketplace — without requiring a human in the loop.
-
----
-
-## Deployed Contracts — Ethereum Sepolia
-
-All 8 contracts deployed and verified.
-
-| Contract | Address |
-|---|---|
-| AgentIdentity.sol | [`0xF6CEc60C9dD6aa283D42fE5D38537303F9bE231B`](https://sepolia.etherscan.io/address/0xF6CEc60C9dD6aa283D42fE5D38537303F9bE231B) |
-| ReputationOracle.sol | [`0xAda16c3ca238BE164E716F280D3D184269e4A0A9`](https://sepolia.etherscan.io/address/0xAda16c3ca238BE164E716F280D3D184269e4A0A9) |
-| AgentVault.sol | [`0x58B0f345212c147eC67697609aE00ddee951C47c`](https://sepolia.etherscan.io/address/0x58B0f345212c147eC67697609aE00ddee951C47c) |
-| AgentMarketplace.sol | [`0xff7A5eBb3ab2C1E92A58B7b6F25CCB6588785Af9`](https://sepolia.etherscan.io/address/0xff7A5eBb3ab2C1E92A58B7b6F25CCB6588785Af9) |
-| AEVToken.sol | [`0x1C47FE8AE5531008Ec57fC60C7498Ebf2c2Ac920`](https://sepolia.etherscan.io/address/0x1C47FE8AE5531008Ec57fC60C7498Ebf2c2Ac920) |
-| ReputationController.sol | [`0x09D6D8Bb81140E8395Af7b6bc954b0Ab053dd121`](https://sepolia.etherscan.io/address/0x09D6D8Bb81140E8395Af7b6bc954b0Ab053dd121) |
-| TokenVesting.sol | [`0x482C01015E7a845BBd923d18eF627D90448b9d2c`](https://sepolia.etherscan.io/address/0x482C01015E7a845BBd923d18eF627D90448b9d2c) |
-| AevumDAO.sol | [`0x11205fdFC73Bc7527C2fDc68E7369fcC1f6144dD`](https://sepolia.etherscan.io/address/0x11205fdFC73Bc7527C2fDc68E7369fcC1f6144dD) |
-| VerifiableBacktestOracle.sol | [`0x9dBC2f11E11C64810922B4c68d55DFf1BCA4Dc8d`](https://sepolia.etherscan.io/address/0x9dBC2f11E11C64810922B4c68d55DFf1BCA4Dc8d) |
-
----
-
-## Architecture
-
-| Contract | Purpose |
-|---|---|
-| **AgentIdentity** | Persistent on-chain identity — strategy hash, execution policy, performance certs |
-| **ReputationOracle** | Auth gateway — checks agent score against protocol thresholds |
-| **ReputationController** | Multi-oracle consensus — requires majority approval for reputation updates |
-| **AgentVault** | Reputation-gated shared treasury with per-agent withdrawal limits |
-| **AgentMarketplace** | Trustless service marketplace — escrow, jobs, dispute resolution, pull-payment fees |
-| **AEVToken** | $AEV — 1B hard cap, 50% fee burn, ERC20Votes for snapshot governance |
-| **TokenVesting** | Time-locked allocations — cliff periods, revocable, 4yr max |
-| **AevumDAO** | Token-holder governance — snapshot voting, 48hr timelock, approved target whitelist |
-| **VerifiableBacktestOracle** | On-chain strategy commitment + forward window + attestation + certificate issuance |
-
----
+All contracts verified on [Etherscan Sepolia](https://sepolia.etherscan.io).
 
 ## Security
 
-- Extensive internal pre-audit hardening: 5 manual reviews + 4 Slither static analysis passes
-- **Hexens professional audit in progress** — Kasper Zwijsen (Head of Audits)
-- Code4rena community audit submitted
-- See [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) for design decisions and accepted deferrals
-- See [`TECHNICAL_DOCS.md`](TECHNICAL_DOCS.md) for full contract documentation
+**Audit status:** No third-party audit has been completed. A professional audit by Hexens (Kasper Zwijsen, Head of Audits — previously audited EigenLayer, Lido, LayerZero) is scoped and contracted, restarting at first investment close.
 
----
+**Internal review:** 5 manual passes, 4 Slither passes, AuditAid external review (findings fixed), Claude Opus source review.
 
-## Documentation
+**Test suite:** 23 Foundry tests, all passing. See `test/foundry/`.
 
-| Document | Description |
-|---|---|
-| [`TECHNICAL_DOCS.md`](TECHNICAL_DOCS.md) | Full contract documentation — state, functions, access control |
-| [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) | Design decisions and accepted deferrals |
-| [`MAINNET_RUNBOOK.md`](MAINNET_RUNBOOK.md) | Step-by-step mainnet deployment checklist |
-| [`POLICYGATE_V2.md`](POLICYGATE_V2.md) | V2 concept — off-chain agent action gating |
-| [`ROADMAP.md`](ROADMAP.md) | Full protocol roadmap — v2 architecture, governance upgrades, token utility |
-| [Whitepaper](https://aevumprotocol.io/whitepaper) | Full protocol whitepaper |
+**Known limitations:** See [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md) for all documented architectural decisions and known issues.
 
----
+## What VBO certificates prove
 
-## Tech Stack
+VBO certificates prove **process integrity** — the strategy was committed on-chain before the forward window opened, making post-hoc modification cryptographically impossible.
 
-- Solidity `^0.8.28` + OpenZeppelin v5
-- Hardhat (EVM target: `cancun` — required for ERC20Votes `mcopy` opcode)
-- ethers.js v6
-- React + Vite + Tailwind (frontend at [aevum-frontend.vercel.app](https://aevum-frontend.vercel.app))
-- Alchemy (Sepolia RPC)
+They do **not** prove:
+- That the bot traded exactly as described (v1 — execution proofs are v2 roadmap)
+- Future profitability
+- Absence of other forms of overfitting
 
----
+## Atlas Oracle Integration
 
-## Local Development
+VBO v2 inherits `PullOracleConsumerStandard` from Atlas Oracle. BTC/USD prices at commit and attestation time are cryptographically signed by Atlas Oracle (905+ exchange sources, CoinMarketCap-backed) and verified on-chain. The `atlasVerified` flag on each certificate indicates whether both price points were Atlas-attested.
 
-```shell
+## Development
+
+```bash
 npm install
 npx hardhat compile
 npx hardhat test
-npx hardhat run scripts/deploy.js --network sepolia
+export PATH="$PATH:~/.foundry/bin" && forge test -vv
 ```
-
----
-
-## Live Demo
-
-[aevum-frontend.vercel.app](https://aevum-frontend.vercel.app) — connect a MetaMask wallet on Sepolia to:
-- Register an AI agent on-chain
-- Check reputation scores
-- Browse and create marketplace listings
-- View and vote on DAO proposals
-- Deposit to the agent vault
-
----
-
-## Roadmap
-
-| Phase | Status | Milestone |
-|---|---|---|
-| Phase 0 | ✅ Current | 9 contracts deployed, Certificate #001 committed, Hexens audit in progress |
-| Phase 1 | 🔜 | Hexens report published, incentivized testnet, $500K raise |
-| Phase 2 | 📅 | $AEV token launch, DEX listing, ETHOnline 2026 |
-| Phase 3 | 📅 | Mainnet, cross-chain bridges, PolicyGate V2 |
-
----
 
 ## License
 
-MIT
-
----
-
-## Disclaimer
-
-Testnet software under active professional audit. Not yet deployed to mainnet. Not financial advice. $AEV has no monetary value on testnet. Aevum Protocol Inc. is a Delaware C-corporation incorporated July 20, 2026.
+MIT — see [LICENSE](./LICENSE)
