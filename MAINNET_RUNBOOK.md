@@ -1,5 +1,17 @@
 # Aevum Protocol — Mainnet Deployment Runbook
-**Status:** Active — September 4, 2026 mainnet launch. Professional audit on hold pending funding.  
+**Status:** Active — September 4, 2026 mainnet launch.
+
+## Contracts deploying September 4 (VBO Core only)
+
+| Contract | Description |
+|---|---|
+| AgentIdentity | Required by VBO for cert issuance |
+| ReputationOracle v2 | Required by VBO for agent authorization |
+| ReputationController v2 | Required by VBO for reputation management |
+| VBO v2 (Atlas Oracle) | Hero product — issues certificates |
+
+## Post-funding deploys (separate runbook)
+AEVToken, TokenVesting, AevumDAO, AgentVault, AgentMarketplace  
 **Target:** ETHOnline 2026 (September 4–16)  
 
 ---
