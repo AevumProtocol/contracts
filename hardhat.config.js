@@ -26,11 +26,11 @@ module.exports = {
       chainId: 1,
     },
     sepolia: {
-      url: "https://eth-sepolia.g.alchemy.com/v2/8T2fc5U66x3BLNv7oDjR5",
+      url: process.env.SEPOLIA_RPC_URL || "https://eth-sepolia.g.alchemy.com/v2/" + process.env.ALCHEMY_SEPOLIA_KEY,
       accounts: [process.env.DEPLOYER_PRIVATE_KEY],
     },
   },
   etherscan: {
-    apiKey: "3FTNB5PNSSU84I95T152YIRPFR66FN4A98",
+    apiKey: process.env.ETHERSCAN_API_KEY,
   },
 };
