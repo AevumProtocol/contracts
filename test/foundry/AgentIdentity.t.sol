@@ -38,30 +38,28 @@ contract AgentIdentityTest is Test {
         identity.registerAgent(keccak256("strategy2"), "ipfs://test2", defaultPolicy);
     }
 
-    function test_C03_reputationResetViaDeactivation() public {
+    function test_C03_reputationResetFixed() public {
         vm.prank(agent1);
         uint256 agentId1 = identity.registerAgent(keccak256("strategy"), "ipfs://1", defaultPolicy);
         assertGt(agentId1, 0);
-
         vm.prank(agent1);
         identity.deactivateAgent(agentId1);
-
+        // C-03 FIX: re-registration blocked
         vm.prank(agent1);
-        uint256 agentId2 = identity.registerAgent(keccak256("strategy2"), "ipfs://2", defaultPolicy);
-        assertGt(agentId2, agentId1);
-        emit log("C-03 DOCUMENTED: same address gets new agentId after deactivation -- score resets");
+        vm.expectRevert();
+        identity.registerAgent(keccak256("strategy2"), "ipfs://2", defaultPolicy);
+        emit log("C-03 FIXED: re-registration blocked after deactivation");
     }
 
-    function test_C03_deactivationOrphansCertificates() public {
+    function test_C03_deactivationPreservesCertificates() public {
         vm.prank(agent1);
         uint256 agentId = identity.registerAgent(keccak256("strategy"), "ipfs://1", defaultPolicy);
-
         vm.prank(agent1);
         identity.deactivateAgent(agentId);
-
-        vm.expectRevert();
-        identity.getAgent(agentId);
-        emit log("C-03 DOCUMENTED: deactivation permanently orphans certificates");
+        // C-03 FIX: getAgent still works after deactivation -- certificates not orphaned
+        AgentIdentity.AgentRecord memory record = identity.getAgent(agentId);
+        assertFalse(record.isActive);
+        emit log("C-03 FIXED: deactivated agent record still readable -- certificates preserved");
     }
 
     function test_setReputationController_onlyOwner() public {

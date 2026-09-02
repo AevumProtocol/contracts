@@ -161,10 +161,11 @@ contract AgentIdentity is IAgentIdentity {
     function deactivateAgent(uint256 agentId)
         external agentExists(agentId) onlyAgentOwner(agentId)
     {
-        // M-03 fix: clear both mappings on deactivation
+        // Fix C-03: retire identity instead of deleting it
+        // Keep owner set so agentExists remains true for certificate lookups
+        // Keep _ownerToAgentId set so same address cannot re-register and reset score
         _agents[agentId].isActive = false;
-        _agents[agentId].owner = address(0);
-        _ownerToAgentId[msg.sender] = 0;
+        // Do NOT zero owner or _ownerToAgentId -- prevents score laundering via re-registration
         emit AgentDeactivated(agentId, msg.sender);
     }
 
