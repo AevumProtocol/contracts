@@ -1,155 +1,122 @@
-const hre = require("hardhat");
-const { ethers } = hre;
-const fs = require("fs");
+/**
+ * deployMainnet.js — September 4, 2026 ETHOnline Launch
+ * Deploys only the 4 contracts VBO v2 requires:
+ * 1. AgentIdentity
+ * 2. ReputationOracle v2
+ * 3. ReputationController v2
+ * 4. VBO v2 (with Atlas Oracle pull mode)
+ *
+ * Post-funding deploys (separate script):
+ * - AEVToken, TokenVesting, AevumDAO, AgentVault, AgentMarketplace
+ *
+ * Run: npx hardhat run scripts/deployMainnet.js --network mainnet
+ */
 
-// Atlas Oracle mainnet address — fill when Leonarda sends integration materials
-const ATLAS_ORACLE_MAINNET = "0x0000000000000000000000000000000000000000"; // FILL
+require('dotenv').config();
+const { ethers } = require("hardhat");
 
 async function main() {
   const [deployer] = await ethers.getSigners();
   const balance = await ethers.provider.getBalance(deployer.address);
+
+  console.log("═══════════════════════════════════════════════");
+  console.log("  Aevum Protocol — Mainnet Deploy (VBO Core)  ");
+  console.log("═══════════════════════════════════════════════");
   console.log("Deployer:", deployer.address);
   console.log("Balance:", ethers.formatEther(balance), "ETH");
-  console.log("Network:", hre.network.name);
-  console.log("=".repeat(50));
+  console.log("Network:", (await ethers.provider.getNetwork()).name);
+  console.log("═══════════════════════════════════════════════\n");
 
-  // Atlas Oracle integrated via PullOracleConsumerStandard — price comes from calldata, no address needed
+  if (ethers.formatEther(balance) < 0.02) {
+    throw new Error("Insufficient ETH — need at least 0.02 ETH for gas");
+  }
 
   const addresses = {};
 
-  // 1. AgentIdentity
-  console.log("\n[1/9] Deploying AgentIdentity...");
+  // ── 1. AgentIdentity ────────────────────────────────────────────────────────
+  console.log("1/4 Deploying AgentIdentity...");
   const AgentIdentity = await ethers.getContractFactory("AgentIdentity");
   const agentIdentity = await AgentIdentity.deploy();
   await agentIdentity.waitForDeployment();
   addresses.AgentIdentity = await agentIdentity.getAddress();
-  console.log("✓ AgentIdentity:", addresses.AgentIdentity);
+  console.log("   ✓ AgentIdentity:", addresses.AgentIdentity);
 
-  // 2. ReputationOracle v2
-  console.log("\n[2/9] Deploying ReputationOracle v2...");
+  // ── 2. ReputationOracle v2 ───────────────────────────────────────────────────
+  console.log("2/4 Deploying ReputationOracle v2...");
   const ReputationOracle = await ethers.getContractFactory("ReputationOracle");
   const reputationOracle = await ReputationOracle.deploy(addresses.AgentIdentity);
   await reputationOracle.waitForDeployment();
   addresses.ReputationOracle = await reputationOracle.getAddress();
-  console.log("✓ ReputationOracle v2:", addresses.ReputationOracle);
+  console.log("   ✓ ReputationOracle v2:", addresses.ReputationOracle);
 
-  // 3. ReputationController v2
-  console.log("\n[3/9] Deploying ReputationController v2...");
+  // ── 3. ReputationController v2 ───────────────────────────────────────────────
+  console.log("3/4 Deploying ReputationController v2...");
   const ReputationController = await ethers.getContractFactory("ReputationController");
   const reputationController = await ReputationController.deploy(
     addresses.AgentIdentity,
-    deployer.address,   // oracle 1 — deployer
-    deployer.address    // oracle 2 — update to second oracle before mainnet
+    addresses.ReputationOracle
   );
   await reputationController.waitForDeployment();
   addresses.ReputationController = await reputationController.getAddress();
-  console.log("✓ ReputationController v2:", addresses.ReputationController);
+  console.log("   ✓ ReputationController v2:", addresses.ReputationController);
 
-  // 4. AgentVault v3
-  console.log("\n[4/9] Deploying AgentVault v3...");
-  const AgentVault = await ethers.getContractFactory("AgentVault");
-  const agentVault = await AgentVault.deploy(
-    addresses.ReputationOracle,
-    ethers.parseEther("0.1"), // default withdraw limit
-    addresses.AgentIdentity
-  );
-  await agentVault.waitForDeployment();
-  addresses.AgentVault = await agentVault.getAddress();
-  console.log("✓ AgentVault v3:", addresses.AgentVault);
-
-  // 5. AgentMarketplace
-  console.log("\n[5/9] Deploying AgentMarketplace...");
-  const AgentMarketplace = await ethers.getContractFactory("AgentMarketplace");
-  const agentMarketplace = await AgentMarketplace.deploy(
-    addresses.AgentIdentity,
-    addresses.ReputationOracle
-  );
-  await agentMarketplace.waitForDeployment();
-  addresses.AgentMarketplace = await agentMarketplace.getAddress();
-  console.log("✓ AgentMarketplace:", addresses.AgentMarketplace);
-
-  // 6. AEVToken
-  console.log("\n[6/9] Deploying AEVToken...");
-  const AEVToken = await ethers.getContractFactory("AEVToken");
-  const aevToken = await AEVToken.deploy(deployer.address);
-  await aevToken.waitForDeployment();
-  addresses.AEVToken = await aevToken.getAddress();
-  console.log("✓ AEVToken:", addresses.AEVToken);
-
-  // 7. TokenVesting
-  console.log("\n[7/9] Deploying TokenVesting...");
-  const TokenVesting = await ethers.getContractFactory("TokenVesting");
-  const tokenVesting = await TokenVesting.deploy(addresses.AEVToken);
-  await tokenVesting.waitForDeployment();
-  addresses.TokenVesting = await tokenVesting.getAddress();
-  console.log("✓ TokenVesting:", addresses.TokenVesting);
-
-  // Whitelist TokenVesting in AEVToken
-  const aevTokenContract = await ethers.getContractAt("AEVToken", addresses.AEVToken);
-  await (await aevTokenContract.excludeFromFee(addresses.TokenVesting)).wait();
-  await (await aevTokenContract.setWhitelisted(addresses.TokenVesting, true)).wait();
-  console.log("✓ TokenVesting whitelisted in AEVToken");
-
-  // 8. AevumDAO
-  console.log("\n[8/9] Deploying AevumDAO...");
-  const AevumDAO = await ethers.getContractFactory("AevumDAO");
-  const aevumDAO = await AevumDAO.deploy(addresses.AEVToken);
-  await aevumDAO.waitForDeployment();
-  addresses.AevumDAO = await aevumDAO.getAddress();
-  console.log("✓ AevumDAO:", addresses.AevumDAO);
-
-  // 9. VerifiableBacktestOracle v2
-  console.log("\n[9/9] Deploying VerifiableBacktestOracle v2...");
+  // ── 4. VBO v2 (Atlas Oracle pull mode) ──────────────────────────────────────
+  console.log("4/4 Deploying VBO v2 with Atlas Oracle...");
   const VBO = await ethers.getContractFactory("VerifiableBacktestOracleV2");
-  const vbo = await VBO.deploy(addresses.AgentIdentity); // Atlas price via calldata — no oracle address needed
+  const vbo = await VBO.deploy(addresses.AgentIdentity);
   await vbo.waitForDeployment();
-  addresses.VerifiableBacktestOracle = await vbo.getAddress();
-  console.log("✓ VerifiableBacktestOracle v2:", addresses.VerifiableBacktestOracle);
+  addresses.VBO = await vbo.getAddress();
+  console.log("   ✓ VBO v2:", addresses.VBO);
 
-  console.log("\n" + "=".repeat(50));
-  console.log("ALL 9 CONTRACTS DEPLOYED");
-  console.log("=".repeat(50));
-
-  // Wire contracts
-  console.log("\nWiring contracts...");
+  // ── Setup ────────────────────────────────────────────────────────────────────
+  console.log("\nConfiguring contracts...");
 
   // Set ReputationController on AgentIdentity
-  const identity = await ethers.getContractAt("AgentIdentity", addresses.AgentIdentity);
-  await (await identity.setReputationController(addresses.ReputationController)).wait();
-  console.log("✓ ReputationController set on AgentIdentity");
-
-  // Register AgentVault with ReputationOracle
-  const oracle = await ethers.getContractAt("ReputationOracle", addresses.ReputationOracle);
-  await (await oracle.registerProtocol(addresses.AgentVault, 100)).wait();
-  console.log("✓ AgentVault registered with ReputationOracle (min score: 100)");
-
-  // Register AgentMarketplace with ReputationOracle
-  await (await oracle.registerProtocol(addresses.AgentMarketplace, 200)).wait();
-  console.log("✓ AgentMarketplace registered with ReputationOracle (min score: 200)");
+  await (await agentIdentity.setReputationController(addresses.ReputationController)).wait();
+  console.log("   ✓ ReputationController set on AgentIdentity");
 
   // Approve VBO as cert issuer on AgentIdentity
-  await (await identity.setApprovedCertIssuer(addresses.VerifiableBacktestOracle, true)).wait();
-  console.log("✓ VBO approved as cert issuer on AgentIdentity");
+  await (await agentIdentity.setApprovedCertIssuer(addresses.VBO, true)).wait();
+  console.log("   ✓ VBO approved as cert issuer on AgentIdentity");
 
-  // Save addresses
+  // Register ReputationOracle with AgentIdentity
+  await (await agentIdentity.registerOracle(addresses.ReputationOracle)).wait();
+  console.log("   ✓ ReputationOracle registered on AgentIdentity");
+
+  // ── Gas report ───────────────────────────────────────────────────────────────
+  const finalBalance = await ethers.provider.getBalance(deployer.address);
+  const gasUsed = balance - finalBalance;
+
+  console.log("\n═══════════════════════════════════════════════");
+  console.log("  Deployment Complete                          ");
+  console.log("═══════════════════════════════════════════════");
+  console.log("AgentIdentity:        ", addresses.AgentIdentity);
+  console.log("ReputationOracle v2:  ", addresses.ReputationOracle);
+  console.log("ReputationController: ", addresses.ReputationController);
+  console.log("VBO v2:               ", addresses.VBO);
+  console.log("Gas used:             ", ethers.formatEther(gasUsed), "ETH");
+  console.log("Remaining balance:    ", ethers.formatEther(finalBalance), "ETH");
+  console.log("═══════════════════════════════════════════════");
+
+  // Save addresses to file
+  const fs = require('fs');
   const output = {
-    network: hre.network.name,
+    network: "mainnet",
     deployedAt: new Date().toISOString(),
     deployer: deployer.address,
     contracts: addresses,
+    gasUsed: ethers.formatEther(gasUsed),
   };
-
-  fs.writeFileSync("mainnet-addresses.json", JSON.stringify(output, null, 2));
+  fs.writeFileSync('mainnet-addresses.json', JSON.stringify(output, null, 2));
   console.log("\n✓ Addresses saved to mainnet-addresses.json");
-
-  console.log("\n" + "=".repeat(50));
-  console.log("NEXT STEPS:");
-  console.log("1. Verify all contracts on Etherscan");
-  console.log("2. Share VBO address with Leonarda:", addresses.VerifiableBacktestOracle);
-  console.log("3. Update aevum-internal/contracts/addresses.md");
-  console.log("4. Update frontend contracts.js with mainnet addresses");
-  console.log("5. Deploy mainnet subgraph");
-  console.log("=".repeat(50));
+  console.log("\nNext steps:");
+  console.log("1. Verify contracts on Etherscan");
+  console.log("2. Update frontend CONTRACTS with mainnet addresses");
+  console.log("3. Update aevum-subgraph with mainnet addresses");
+  console.log("4. Submit ETHOnline at 7:30 AM PDT");
 }
 
-main().catch(console.error);
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
