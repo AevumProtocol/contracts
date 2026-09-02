@@ -144,3 +144,13 @@ The correct metric is Time-Weighted Return (TWR), which eliminates the effect of
 Going forward, all VBO certificates will report TWR as the primary metric alongside: (1) raw value change in USD, (2) capital deployed during window, and (3) net alpha over BTC buy-and-hold. TWR is the institutional standard used by allocators to compare strategies fairly. The on-chain attested results hash reflects the original raw calculation — methodology corrections are applied at the display layer.
 
 Additionally: the window for Certificate #001 ran 8 days (July 31 → August 8), not 7 as labeled. The regime was classified as Neutral (BTC +3.72% during window) rather than Bear — the bot's internal regime state was Bear based on the 200-day MA, but market action during the window was positive.
+
+## C-04: Single EOA owner (known, post-launch)
+
+All deployed contracts are owned by a single EOA deployer wallet. This is a centralization risk — if the private key is compromised, all contracts are at risk.
+
+**Mitigation plan:** Transfer ownership to a Gnosis Safe multisig after first investment close. Requires 2-of-3 signers minimum.
+
+**Current risk level:** Acceptable for testnet and early mainnet with low TVL. Not acceptable at scale.
+
+**Timeline:** Transfer to Gnosis Safe within 30 days of mainnet launch.
