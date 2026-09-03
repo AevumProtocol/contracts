@@ -49,6 +49,7 @@ contract AgentIdentity is IAgentIdentity {
     event CertificateAdded(uint256 indexed agentId, bytes32 certHash);
     event ExecutionPolicyUpdated(uint256 indexed agentId);
     event AgentDeactivated(uint256 indexed agentId, address indexed agentOwner);
+    event AgentReactivated(uint256 indexed agentId, address indexed agentOwner);
     event CertIssuerApproved(address indexed issuer, bool approved);
     event ControllerUpdated(address indexed newController);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -162,11 +163,17 @@ contract AgentIdentity is IAgentIdentity {
         external agentExists(agentId) onlyAgentOwner(agentId)
     {
         // Fix C-03: retire identity instead of deleting it
-        // Keep owner set so agentExists remains true for certificate lookups
-        // Keep _ownerToAgentId set so same address cannot re-register and reset score
         _agents[agentId].isActive = false;
-        // Do NOT zero owner or _ownerToAgentId -- prevents score laundering via re-registration
         emit AgentDeactivated(agentId, msg.sender);
+    }
+
+    function reactivateAgent(uint256 agentId)
+        external agentExists(agentId) onlyAgentOwner(agentId)
+    {
+        // N-02 fix: allow reactivation without score reset -- preserves C-03 fix
+        require(!_agents[agentId].isActive, "Agent already active");
+        _agents[agentId].isActive = true;
+        emit AgentReactivated(agentId, msg.sender);
     }
 
     function getAgent(uint256 agentId)
@@ -174,6 +181,12 @@ contract AgentIdentity is IAgentIdentity {
         returns (AgentRecord memory)
     {
         return _agents[agentId];
+    }
+
+    function isAgentActive(address agentAddress) external view returns (bool) {
+        uint256 agentId = _ownerToAgentId[agentAddress];
+        if (agentId == 0) return false;
+        return _agents[agentId].isActive;
     }
 
     function getAgentByAddress(address agentAddress)

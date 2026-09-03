@@ -6,6 +6,7 @@ import {PullOracleConsumerStandard} from "./atlas-oracle/PullOracleConsumerStand
 interface IAgentIdentity {
     function getAgentByAddress(address agentAddress) external view returns (uint256);
     function addPerformanceCert(uint256 agentId, bytes32 certHash, string calldata metadataURI) external;
+    function isAgentActive(address agentAddress) external view returns (bool);  // N-01
 }
 
 /// @title VerifiableBacktestOracle v2 — Atlas Oracle pull mode integration
@@ -147,15 +148,15 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
     function commitStrategy(
         bytes32 strategyHash,
         uint256 forwardWindowDays
-    ) external payable returns (uint256) {
+    ) external payable nonReentrant returns (uint256) {
         require(strategyHash != bytes32(0), "Invalid strategy hash");
         require(forwardWindowDays * 1 days >= minForwardWindow, "Window too short");
         require(forwardWindowDays * 1 days <= maxForwardWindow, "Window too long");
         require(msg.value >= commitmentBond, "Insufficient bond");
 
-        // Fix M-01: check agent registration at commit time, not just at attest time
-        // Prevents users from bonding ETH they can never recover via attestation
+        // M-01 + N-01: check agent is registered AND active at commit time
         require(agentIdentity.getAgentByAddress(msg.sender) != 0, "Must register agent before committing");
+        require(agentIdentity.isAgentActive(msg.sender), "Agent is deactivated");
 
         // Anti-shotgun: max 3 commitments per 30-day window
         if (block.timestamp >= identityWindowStart[msg.sender] + windowTrackingPeriod) {
@@ -213,7 +214,7 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
         RegimeType regime,
         string calldata metadataURI,
         string calldata attestationNote
-    ) external onlyAttestor returns (uint256) {  // L-06: not payable, no ETH needed
+    ) external onlyAttestor nonReentrant returns (uint256) {  // L-06: not payable, no ETH needed
         Commitment storage commitment = commitments[commitmentId];
         require(commitment.submitter != address(0), "Commitment not found");
         require(commitment.status == CommitmentStatus.Pending, "Not pending");
@@ -252,7 +253,7 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
             returnBps: returnBps,
             priceAtCommit: commitment.priceAtCommit,
             priceAtWindowEnd: priceAtWindowEnd,
-            atlasVerified: (commitment.priceAtCommit != 0 && priceAtWindowEnd != 0),  // H-04
+            atlasVerified: (commitment.priceAtCommit != 0 && atlasTimestamp != 0),  // N-03 fix: use timestamp not price
             submissionCount: identityCommitmentCount[commitment.submitter],
             metadataURI: metadataURI,
             attestationNote: attestationNote,
@@ -273,14 +274,19 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
         return certId;
     }
 
-    function slashExpired(uint256 commitmentId) external {
+    function slashExpired(uint256 commitmentId) external nonReentrant {
         Commitment storage commitment = commitments[commitmentId];
+        require(commitment.submitter != address(0), "Commitment not found");
         require(commitment.status == CommitmentStatus.Pending, "Not pending");
         require(block.timestamp >= commitment.windowEnd + 30 days, "Grace period not expired");
         uint256 bond = commitment.bondAmount;
         commitment.status = CommitmentStatus.Slashed;
         commitment.bondAmount = 0;
         emit CommitmentSlashed(commitmentId, commitment.submitter, bond);
+
+        // H-03: route slashed bond to owner treasury
+        (bool sent, ) = payable(owner).call{value: bond}("");
+        require(sent, "Slash transfer failed");
     }
 
     function revokeCertificate(uint256 certificateId, string calldata reason) external onlyOwner {
@@ -302,9 +308,17 @@ contract VerifiableBacktestOracleV2 is PullOracleConsumerStandard {
         return commitments[commitmentId];
     }
 
+    address public pendingOwner;  // M-07: two-step ownership
+
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Invalid address");
+        pendingOwner = newOwner;
         emit OwnershipTransferred(owner, newOwner);
-        owner = newOwner;
+    }
+
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "Not pending owner");
+        owner = pendingOwner;
+        pendingOwner = address(0);
     }
 }

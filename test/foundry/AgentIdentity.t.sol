@@ -78,4 +78,28 @@ contract AgentIdentityTest is Test {
         identity.setApprovedCertIssuer(agent1, true);
         assertTrue(identity.approvedCertIssuers(agent1));
     }
+
+    function test_N02_reactivateAgent() public {
+        vm.prank(agent1);
+        uint256 agentId = identity.registerAgent(keccak256("strategy"), "ipfs://1", defaultPolicy);
+        vm.prank(agent1);
+        identity.deactivateAgent(agentId);
+        assertFalse(identity.isAgentActive(agent1));
+
+        // N-02 fix: can reactivate without score reset
+        vm.prank(agent1);
+        identity.reactivateAgent(agentId);
+        assertTrue(identity.isAgentActive(agent1));
+        emit log("N-02 FIXED: reactivateAgent works without score reset");
+    }
+
+    function test_isAgentActive_returnsFalseForUnregistered() public {
+        assertFalse(identity.isAgentActive(makeAddr("unregistered")));
+    }
+
+    function test_isAgentActive_returnsTrueForActive() public {
+        vm.prank(agent1);
+        identity.registerAgent(keccak256("strategy"), "ipfs://1", defaultPolicy);
+        assertTrue(identity.isAgentActive(agent1));
+    }
 }
