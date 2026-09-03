@@ -1,0 +1,2224 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+interface IAgentIdentity {
+    function updateReputation(uint256 agentId, uint256 newScore) external;
+    function getAgentByAddress(address agentAddress) external view returns (uint256);
+}
+
+contract AgentIdentity is IAgentIdentity {
+
+    struct ExecutionPolicy {
+        uint256 maxGasPerTx;
+        uint256 dailySpendLimit;
+        bool canInitiateTrades;
+        bool canInteractWithProtocols;
+    }
+
+    struct PerformanceCert {
+        bytes32 certHash;
+        uint256 timestamp;
+        address issuedBy;
+        string metadataURI;
+    }
+
+    struct AgentRecord {
+        address owner;
+        bytes32 strategyHash;
+        uint256 reputationScore;
+        uint256 registeredAt;
+        bool isActive;
+        ExecutionPolicy policy;
+        PerformanceCert[] certs;
+        string metadataURI;
+    }
+
+    uint256 private _agentCounter;
+    mapping(uint256 => AgentRecord) private _agents;
+    mapping(address => uint256) private _ownerToAgentId;
+
+    address public owner;
+    address public reputationController;
+
+    // Approved cert issuers — M-01
+    mapping(address => bool) public approvedCertIssuers;
+
+    event AgentRegistered(uint256 indexed agentId, address indexed agentOwner, bytes32 strategyHash);
+    event StrategyUpdated(uint256 indexed agentId, bytes32 newHash);
+    event ReputationUpdated(uint256 indexed agentId, uint256 newScore);
+    event CertificateAdded(uint256 indexed agentId, bytes32 certHash);
+    event ExecutionPolicyUpdated(uint256 indexed agentId);
+    event AgentDeactivated(uint256 indexed agentId, address indexed agentOwner);
+    event CertIssuerApproved(address indexed issuer, bool approved);
+    event ControllerUpdated(address indexed newController);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not contract owner");
+        _;
+    }
+
+    modifier onlyAuthorizedController() {
+        require(
+            msg.sender == reputationController,
+            "Not authorized controller"
+        );
+        _;
+    }
+
+    modifier agentExists(uint256 agentId) {
+        require(_agents[agentId].owner != address(0), "Agent does not exist");
+        _;
+    }
+
+    modifier onlyAgentOwner(uint256 agentId) {
+        require(_agents[agentId].owner == msg.sender, "Not agent owner");
+        _;
+    }
+
+    constructor() {
+        owner = msg.sender;
+        _agentCounter = 1;
+    }
+
+    function setReputationController(address controller) external onlyOwner {
+        require(controller != address(0), "Invalid address");
+        reputationController = controller;
+        emit ControllerUpdated(controller);
+    }
+
+    function setApprovedCertIssuer(address issuer, bool approved) external onlyOwner {
+        require(issuer != address(0), "Invalid issuer address");
+        approvedCertIssuers[issuer] = approved;
+        emit CertIssuerApproved(issuer, approved);
+    }
+
+    function registerAgent(
+        bytes32 strategyHash,
+        string calldata metadataURI,
+        ExecutionPolicy calldata policy
+    ) external returns (uint256) {
+        require(_ownerToAgentId[msg.sender] == 0, "Address already has an agent");
+
+        uint256 newId = _agentCounter++;
+
+        AgentRecord storage agent = _agents[newId];
+        agent.owner = msg.sender;
+        agent.strategyHash = strategyHash;
+        agent.reputationScore = 100;
+        agent.registeredAt = block.timestamp;
+        agent.isActive = true;
+        agent.policy = policy;
+        agent.metadataURI = metadataURI;
+
+        _ownerToAgentId[msg.sender] = newId;
+
+        emit AgentRegistered(newId, msg.sender, strategyHash);
+        return newId;
+    }
+
+    function updateStrategy(uint256 agentId, bytes32 newHash)
+        external agentExists(agentId) onlyAgentOwner(agentId)
+    {
+        _agents[agentId].strategyHash = newHash;
+        emit StrategyUpdated(agentId, newHash);
+    }
+
+    /// @notice Performance certs must be issued by an approved issuer, not self-issued
+    function addPerformanceCert(
+        uint256 agentId,
+        bytes32 certHash,
+        string calldata metadataURI
+    ) external agentExists(agentId) {
+        require(approvedCertIssuers[msg.sender], "Not an approved cert issuer");
+
+        PerformanceCert memory cert = PerformanceCert({
+            certHash: certHash,
+            timestamp: block.timestamp,
+            issuedBy: msg.sender,
+            metadataURI: metadataURI
+        });
+        _agents[agentId].certs.push(cert);
+        emit CertificateAdded(agentId, certHash);
+    }
+
+    function updateReputation(uint256 agentId, uint256 newScore)
+        external override onlyAuthorizedController agentExists(agentId)
+    {
+        require(newScore <= 1000, "Score exceeds max");
+        _agents[agentId].reputationScore = newScore;
+        emit ReputationUpdated(agentId, newScore);
+    }
+
+    /// @notice ExecutionPolicy fields are advisory — enforced off-chain by agent operators
+    function setExecutionPolicy(uint256 agentId, ExecutionPolicy calldata policy)
+        external agentExists(agentId) onlyAgentOwner(agentId)
+    {
+        _agents[agentId].policy = policy;
+        emit ExecutionPolicyUpdated(agentId);
+    }
+
+    function deactivateAgent(uint256 agentId)
+        external agentExists(agentId) onlyAgentOwner(agentId)
+    {
+        // M-03 fix: clear both mappings on deactivation
+        _agents[agentId].isActive = false;
+        _agents[agentId].owner = address(0);
+        _ownerToAgentId[msg.sender] = 0;
+        emit AgentDeactivated(agentId, msg.sender);
+    }
+
+    function getAgent(uint256 agentId)
+        external view agentExists(agentId)
+        returns (AgentRecord memory)
+    {
+        return _agents[agentId];
+    }
+
+    function getAgentByAddress(address agentAddress)
+        external view override
+        returns (uint256)
+    {
+        return _ownerToAgentId[agentAddress];
+    }
+
+    function totalAgents() external view returns (uint256) {
+        return _agentCounter - 1;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+}
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+interface IAgentIdentity {
+    struct ExecutionPolicy {
+        uint256 maxGasPerTx;
+        uint256 dailySpendLimit;
+        bool canInitiateTrades;
+        bool canInteractWithProtocols;
+    }
+
+    struct PerformanceCert {
+        bytes32 certHash;
+        uint256 timestamp;
+        address issuedBy;
+        string metadataURI;
+    }
+
+    struct AgentRecord {
+        address owner;
+        bytes32 strategyHash;
+        uint256 reputationScore;
+        uint256 registeredAt;
+        bool isActive;
+        ExecutionPolicy policy;
+        PerformanceCert[] certs;
+        string metadataURI;
+    }
+
+    function getAgent(uint256 agentId) external view returns (AgentRecord memory);
+    function getAgentByAddress(address agentAddress) external view returns (uint256);
+}
+
+interface IReputationOracle {
+    function isAgentAuthorizedView(address agentAddress, address protocol) external view returns (bool);
+    function checkScore(address agentAddress) external view returns (uint256);
+}
+
+contract ReputationOracle is IReputationOracle {
+
+    address public owner;
+    IAgentIdentity public immutable agentIdentity;
+
+    uint256 public defaultMinScore = 100;
+
+    mapping(address => uint256) public protocolMinScores;
+    mapping(address => bool) public registeredProtocols;
+
+    event ProtocolRegistered(address indexed protocol, uint256 minScore);
+    event ProtocolDeregistered(address indexed protocol);
+    event AgentApproved(address indexed protocol, uint256 indexed agentId, uint256 score);
+    event AgentDenied(address indexed protocol, uint256 indexed agentId, uint256 score);
+    event MinScoreUpdated(address indexed protocol, uint256 newScore);
+    event DefaultMinScoreUpdated(uint256 newScore);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+    constructor(address _agentIdentityAddress) {
+        require(_agentIdentityAddress != address(0), "Invalid address");
+        owner = msg.sender;
+        agentIdentity = IAgentIdentity(_agentIdentityAddress);
+    }
+
+    function registerProtocol(address protocol, uint256 minScore) external onlyOwner {
+        require(protocol != address(0), "Invalid protocol address");
+        require(minScore > 0, "Min score must be positive");
+        require(minScore <= 1000, "Score exceeds max");
+        registeredProtocols[protocol] = true;
+        protocolMinScores[protocol] = minScore;
+        emit ProtocolRegistered(protocol, minScore);
+    }
+
+    function deregisterProtocol(address protocol) external onlyOwner {
+        require(registeredProtocols[protocol], "Protocol not registered");
+        registeredProtocols[protocol] = false;
+        protocolMinScores[protocol] = 0;
+        emit ProtocolDeregistered(protocol);
+    }
+
+    function updateMinScore(address protocol, uint256 newScore) external onlyOwner {
+        require(registeredProtocols[protocol], "Protocol not registered");
+        require(newScore > 0, "Min score must be positive");
+        require(newScore <= 1000, "Score exceeds max");
+        protocolMinScores[protocol] = newScore;
+        emit MinScoreUpdated(protocol, newScore);
+    }
+
+    function isAgentAuthorized(address agentAddress, address protocol) external returns (bool) {
+        uint256 agentId = agentIdentity.getAgentByAddress(agentAddress);
+        require(agentId != 0, "Agent not registered");
+
+        IAgentIdentity.AgentRecord memory agent = agentIdentity.getAgent(agentId);
+        require(agent.isActive, "Agent is not active");
+
+        uint256 minScore = registeredProtocols[protocol]
+            ? protocolMinScores[protocol]
+            : defaultMinScore;
+
+        if (agent.reputationScore >= minScore) {
+            emit AgentApproved(protocol, agentId, agent.reputationScore);
+            return true;
+        } else {
+            emit AgentDenied(protocol, agentId, agent.reputationScore);
+            return false;
+        }
+    }
+
+    function isAgentAuthorizedView(address agentAddress, address protocol)
+        external view override returns (bool)
+    {
+        uint256 agentId = agentIdentity.getAgentByAddress(agentAddress);
+        if (agentId == 0) return false;
+
+        IAgentIdentity.AgentRecord memory agent = agentIdentity.getAgent(agentId);
+        if (!agent.isActive) return false;
+
+        uint256 minScore = registeredProtocols[protocol]
+            ? protocolMinScores[protocol]
+            : defaultMinScore;
+
+        return agent.reputationScore >= minScore;
+    }
+
+    // L-03: return 0 instead of reverting for unregistered agents
+    function checkScore(address agentAddress) external view override returns (uint256) {
+        uint256 agentId = agentIdentity.getAgentByAddress(agentAddress);
+        if (agentId == 0) return 0;
+        IAgentIdentity.AgentRecord memory agent = agentIdentity.getAgent(agentId);
+        return agent.reputationScore;
+    }
+
+    function setDefaultMinScore(uint256 newScore) external onlyOwner {
+        require(newScore > 0, "Score must be positive");
+        require(newScore <= 1000, "Score exceeds max");
+        defaultMinScore = newScore;
+        emit DefaultMinScoreUpdated(newScore);
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+}
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+interface IAgentIdentity {
+    function updateReputation(uint256 agentId, uint256 newScore) external;
+    function getAgentByAddress(address agentAddress) external view returns (uint256);
+    function getAgent(uint256 agentId) external view returns (AgentRecord memory);
+
+    struct ExecutionPolicy {
+        uint256 maxGasPerTx;
+        uint256 dailySpendLimit;
+        bool canInitiateTrades;
+        bool canInteractWithProtocols;
+    }
+
+    struct PerformanceCert {
+        bytes32 certHash;
+        uint256 timestamp;
+        address issuedBy;
+        string metadataURI;
+    }
+
+    struct AgentRecord {
+        address owner;
+        bytes32 strategyHash;
+        uint256 reputationScore;
+        uint256 registeredAt;
+        bool isActive;
+        ExecutionPolicy policy;
+        PerformanceCert[] certs;
+        string metadataURI;
+    }
+}
+
+contract ReputationController {
+
+    address public owner;
+    IAgentIdentity public immutable agentIdentity;
+
+    uint256 public constant MAX_SCORE = 1000;
+    uint256 public constant MIN_ORACLES = 2;
+    uint256 public constant MAX_SCORE_DELTA = 200;
+
+    uint256 public proposalExpiry = 7 days;
+    uint256 public minVotingWindow = 1 hours;
+
+    mapping(address => bool) public authorizedOracles;
+    uint256 public oracleCount;
+
+    struct ReputationProposal {
+        uint256 agentId;
+        uint256 newScore;
+        uint256 approvals;
+        uint256 createdAt;
+        bool executed;
+        bool cancelled;
+        mapping(address => bool) hasApproved;
+        mapping(address => bool) approvedAtTime;
+    }
+
+    uint256 public proposalCount;
+    mapping(uint256 => ReputationProposal) public proposals;
+
+    event OracleAdded(address indexed oracle);
+    event OracleRemoved(address indexed oracle);
+    event ProposalCreated(uint256 indexed proposalId, uint256 agentId, uint256 newScore);
+    event ProposalApproved(uint256 indexed proposalId, address indexed oracle);
+    event ProposalExecuted(uint256 indexed proposalId, uint256 agentId, uint256 newScore);
+    event ProposalCancelled(uint256 indexed proposalId);
+    event ProposalExpiryUpdated(uint256 newExpiry);
+    event MinVotingWindowUpdated(uint256 newWindow);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+    modifier onlyOracle() {
+        require(authorizedOracles[msg.sender], "Not authorized oracle");
+        _;
+    }
+
+    modifier minimumOracles() {
+        require(oracleCount >= MIN_ORACLES, "Minimum 2 oracles required");
+        _;
+    }
+
+    constructor(
+        address _agentIdentityAddress,
+        address _oracle1,
+        address _oracle2
+    ) {
+        require(_oracle1 != address(0) && _oracle2 != address(0), "Invalid oracle addresses");
+        require(_oracle1 != _oracle2, "Oracles must be distinct");
+        owner = msg.sender;
+        agentIdentity = IAgentIdentity(_agentIdentityAddress);
+        authorizedOracles[_oracle1] = true;
+        authorizedOracles[_oracle2] = true;
+        oracleCount = 2;
+        emit OracleAdded(_oracle1);
+        emit OracleAdded(_oracle2);
+    }
+
+    function requiredApprovals() public view returns (uint256) {
+        return (oracleCount / 2) + 1;
+    }
+
+    function addOracle(address oracle) external onlyOwner {
+        require(oracle != address(0), "Invalid address");
+        require(!authorizedOracles[oracle], "Already an oracle");
+        authorizedOracles[oracle] = true;
+        oracleCount++;
+        emit OracleAdded(oracle);
+    }
+
+    function removeOracle(address oracle) external onlyOwner {
+        require(authorizedOracles[oracle], "Not an oracle");
+        require(oracleCount > MIN_ORACLES, "Cannot drop below minimum oracles");
+        authorizedOracles[oracle] = false;
+        oracleCount--;
+        emit OracleRemoved(oracle);
+    }
+
+    function proposeReputationUpdate(
+        uint256 agentId,
+        uint256 newScore
+    ) external onlyOracle minimumOracles returns (uint256) {
+        require(newScore <= MAX_SCORE, "Score exceeds max");
+
+        // Enforce score delta limit
+        IAgentIdentity.AgentRecord memory agent = agentIdentity.getAgent(agentId);
+        uint256 currentScore = agent.reputationScore;
+        uint256 delta = newScore > currentScore
+            ? newScore - currentScore
+            : currentScore - newScore;
+        require(delta <= MAX_SCORE_DELTA, "Score change exceeds max delta");
+
+        proposalCount++;
+        ReputationProposal storage proposal = proposals[proposalCount];
+        proposal.agentId = agentId;
+        proposal.newScore = newScore;
+        proposal.approvals = 1;
+        proposal.createdAt = block.timestamp;
+        proposal.executed = false;
+        proposal.cancelled = false;
+        proposal.hasApproved[msg.sender] = true;
+
+        emit ProposalCreated(proposalCount, agentId, newScore);
+        return proposalCount;
+    }
+
+    function approveProposal(uint256 proposalId) external onlyOracle minimumOracles {
+        ReputationProposal storage proposal = proposals[proposalId];
+        require(!proposal.executed, "Already executed");
+        require(!proposal.cancelled, "Proposal cancelled");
+        require(!proposal.hasApproved[msg.sender], "Already approved");
+        require(
+            block.timestamp <= proposal.createdAt + proposalExpiry,
+            "Proposal expired"
+        );
+
+        proposal.hasApproved[msg.sender] = true;
+        proposal.approvals++;
+
+        emit ProposalApproved(proposalId, msg.sender);
+
+        if (proposal.approvals >= requiredApprovals()) {
+            require(
+                block.timestamp >= proposal.createdAt + minVotingWindow,
+                "Voting window not elapsed"
+            );
+            _executeProposal(proposalId);
+        }
+    }
+
+    function cancelProposal(uint256 proposalId) external {
+        ReputationProposal storage proposal = proposals[proposalId];
+        require(!proposal.executed, "Already executed");
+        require(!proposal.cancelled, "Already cancelled");
+        require(
+            msg.sender == owner || authorizedOracles[msg.sender],
+            "Not authorized"
+        );
+        proposal.cancelled = true;
+        emit ProposalCancelled(proposalId);
+    }
+
+    function _executeProposal(uint256 proposalId) internal {
+        ReputationProposal storage proposal = proposals[proposalId];
+        proposal.executed = true;
+        emit ProposalExecuted(proposalId, proposal.agentId, proposal.newScore);
+        agentIdentity.updateReputation(proposal.agentId, proposal.newScore);
+    }
+
+    function hasApproved(uint256 proposalId, address oracle) external view returns (bool) {
+        return proposals[proposalId].hasApproved[oracle];
+    }
+
+    function isActive() external view returns (bool) {
+        return oracleCount >= MIN_ORACLES;
+    }
+
+    function setProposalExpiry(uint256 newExpiry) external onlyOwner {
+        require(newExpiry >= 1 days, "Expiry too short");
+        proposalExpiry = newExpiry;
+        emit ProposalExpiryUpdated(newExpiry);
+    }
+
+    function setMinVotingWindow(uint256 newWindow) external onlyOwner {
+        minVotingWindow = newWindow;
+        emit MinVotingWindowUpdated(newWindow);
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+}
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+interface IReputationOracle {
+    function isAgentAuthorizedView(address agentAddress, address protocol) external view returns (bool);
+    function checkScore(address agentAddress) external view returns (uint256);
+}
+
+contract AgentVault {
+
+    address public owner;
+    IReputationOracle public immutable oracle;
+
+    uint256 public defaultWithdrawLimit;
+    uint256 public maxAgentExposure = 1 ether; // V1 safety cap — limits blast radius under single-operator trust model
+    uint256 public cooldownPeriod = 1 days;
+    uint256 public totalDeposited;
+
+    mapping(address => uint256) public agentWithdrawLimits;
+    mapping(address => uint256) public agentTotalWithdrawn;
+    mapping(address => uint256) public agentLastWithdraw;
+    mapping(address => bool) public agentInitialized;
+    mapping(address => bool) public blacklisted;
+    mapping(uint256 => bool) public blacklistedAgentIds;
+
+    event Deposited(address indexed sender, uint256 amount);
+    event Withdrawn(address indexed agent, uint256 amount);
+    event AgentBlacklisted(address indexed agent);
+    event AgentUnblacklisted(address indexed agent);
+    event AgentIdBlacklisted(uint256 indexed agentId);
+    event AgentIdUnblacklisted(uint256 indexed agentId);
+    event WithdrawLimitSet(address indexed agent, uint256 limit);
+    event DefaultWithdrawLimitUpdated(uint256 newLimit);
+    event MaxAgentExposureUpdated(uint256 newLimit);
+    event CooldownPeriodUpdated(uint256 newPeriod);
+    event ETHRescued(address indexed owner, uint256 amount);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+    modifier notBlacklisted(address agent) {
+        require(!blacklisted[agent], "Agent address is blacklisted");
+        _;
+    }
+
+    constructor(address _oracleAddress, uint256 _defaultWithdrawLimit) {
+        require(_oracleAddress != address(0), "Invalid oracle address");
+        require(_defaultWithdrawLimit > 0, "Limit must be positive");
+        owner = msg.sender;
+        oracle = IReputationOracle(_oracleAddress);
+        defaultWithdrawLimit = _defaultWithdrawLimit;
+    }
+
+    receive() external payable {
+        totalDeposited += msg.value;
+        emit Deposited(msg.sender, msg.value);
+    }
+
+    function deposit() external payable {
+        require(msg.value > 0, "Must send ETH");
+        require(totalDeposited + msg.value <= maxAgentExposure * 1000, "Vault exposure cap reached"); // global cap: 1000x per-agent limit
+        totalDeposited += msg.value;
+        emit Deposited(msg.sender, msg.value);
+    }
+
+    function withdraw(uint256 amount) external notBlacklisted(msg.sender) {
+        require(amount > 0, "Amount must be greater than 0");
+        require(address(this).balance >= amount, "Insufficient vault balance");
+
+        bool authorized = oracle.isAgentAuthorizedView(msg.sender, address(this));
+        require(authorized, "Agent not authorized by oracle");
+
+        uint256 limit = agentWithdrawLimits[msg.sender] > 0
+            ? agentWithdrawLimits[msg.sender]
+            : defaultWithdrawLimit;
+
+        require(amount <= limit, "Exceeds withdraw limit");
+
+        // Fix cooldown bypass on first withdrawal
+        if (agentInitialized[msg.sender]) {
+            require(
+                block.timestamp >= agentLastWithdraw[msg.sender] + cooldownPeriod,
+                "Cooldown period not met"
+            );
+        }
+
+        agentInitialized[msg.sender] = true;
+        agentLastWithdraw[msg.sender] = block.timestamp;
+        agentTotalWithdrawn[msg.sender] += amount;
+        totalDeposited -= amount;
+
+        emit Withdrawn(msg.sender, amount);
+
+        (bool success, ) = payable(msg.sender).call{value: amount}("");
+        require(success, "Transfer failed");
+    }
+
+    function rescueETH() external onlyOwner {
+        uint256 surplus = address(this).balance > totalDeposited
+            ? address(this).balance - totalDeposited
+            : 0;
+        require(surplus > 0, "No surplus ETH to rescue");
+
+        emit ETHRescued(owner, surplus);
+
+        (bool success, ) = payable(owner).call{value: surplus}("");
+        require(success, "Rescue failed");
+    }
+
+    function setWithdrawLimit(address agent, uint256 limit) external onlyOwner {
+        agentWithdrawLimits[agent] = limit;
+        emit WithdrawLimitSet(agent, limit);
+    }
+
+    function setDefaultWithdrawLimit(uint256 newLimit) external onlyOwner {
+        require(newLimit > 0, "Limit must be positive");
+        defaultWithdrawLimit = newLimit;
+        emit DefaultWithdrawLimitUpdated(newLimit);
+    }
+
+    function setMaxAgentExposure(uint256 newLimit) external onlyOwner {
+        require(newLimit > 0, "Limit must be positive");
+        maxAgentExposure = newLimit;
+        emit MaxAgentExposureUpdated(newLimit);
+    }
+
+    function setCooldownPeriod(uint256 newPeriod) external onlyOwner {
+        require(newPeriod >= 1 hours, "Cooldown too short");
+        cooldownPeriod = newPeriod;
+        emit CooldownPeriodUpdated(newPeriod);
+    }
+
+    function blacklistAgent(address agent) external onlyOwner {
+        blacklisted[agent] = true;
+        emit AgentBlacklisted(agent);
+    }
+
+    function unblacklistAgent(address agent) external onlyOwner {
+        blacklisted[agent] = false;
+        emit AgentUnblacklisted(agent);
+    }
+
+    function blacklistAgentId(uint256 agentId) external onlyOwner {
+        blacklistedAgentIds[agentId] = true;
+        emit AgentIdBlacklisted(agentId);
+    }
+
+    function unblacklistAgentId(uint256 agentId) external onlyOwner {
+        blacklistedAgentIds[agentId] = false;
+        emit AgentIdUnblacklisted(agentId);
+    }
+
+    function getVaultBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function getSurplusETH() external view returns (uint256) {
+        if (address(this).balance <= totalDeposited) return 0;
+        return address(this).balance - totalDeposited;
+    }
+
+    function getAgentStats(address agent) external view returns (
+        uint256 withdrawLimit,
+        uint256 totalWithdrawn,
+        uint256 lastWithdraw,
+        bool isBlacklisted,
+        bool initialized
+    ) {
+        return (
+            agentWithdrawLimits[agent] > 0 ? agentWithdrawLimits[agent] : defaultWithdrawLimit,
+            agentTotalWithdrawn[agent],
+            agentLastWithdraw[agent],
+            blacklisted[agent],
+            agentInitialized[agent]
+        );
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+}
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+interface IReputationOracle {
+    function isAgentAuthorizedView(address agentAddress, address protocol) external view returns (bool);
+    function checkScore(address agentAddress) external view returns (uint256);
+}
+
+contract AgentMarketplace is IReputationOracle {
+
+    address public owner;
+    IReputationOracle public immutable oracle;
+
+    uint256 public listingCount;
+    uint256 public jobCount;
+    uint256 public platformFeeBps = 250;
+    uint256 public maxDisputeWindow = 7 days;
+    uint256 public minJobDuration = 1 hours;
+    uint256 public minCancelDelay = 7 days;
+    uint256 public constant maxJobDuration = 90 days;
+
+    // Pull payment pattern for owner fees
+    mapping(address => uint256) public pendingFees;
+
+    enum JobStatus { Open, InProgress, Completed, Disputed, Cancelled }
+
+    struct Listing {
+        uint256 id;
+        address agent;
+        string title;
+        string description;
+        uint256 priceWei;
+        bool active;
+    }
+
+    struct Job {
+        uint256 id;
+        uint256 listingId;
+        address client;
+        address agent;
+        uint256 amount;
+        JobStatus status;
+        uint256 createdAt;
+        uint256 disputedAt;
+    }
+
+    mapping(uint256 => Listing) public listings;
+    mapping(uint256 => Job) public jobs;
+    mapping(address => uint256[]) public agentListings;
+    mapping(address => uint256[]) public clientJobs;
+
+    event ListingCreated(uint256 indexed listingId, address indexed agent, uint256 price);
+    event ListingDeactivated(uint256 indexed listingId);
+    event JobCreated(uint256 indexed jobId, uint256 indexed listingId, address indexed client);
+    event JobCompleted(uint256 indexed jobId, address agent, uint256 amount);
+    event JobDisputed(uint256 indexed jobId, address client);
+    event JobCancelled(uint256 indexed jobId);
+    event DisputeResolved(uint256 indexed jobId, address winner, uint256 amount);
+    event DisputeExpired(uint256 indexed jobId, address agent, uint256 amount);
+    event FeeWithdrawn(address indexed owner, uint256 amount);
+    event PlatformFeeUpdated(uint256 newFeeBps);
+    event MaxDisputeWindowUpdated(uint256 newWindow);
+    event MinJobDurationUpdated(uint256 newDuration);
+    event MinCancelDelayUpdated(uint256 newDelay);
+    event EmergencyCancelled(uint256 indexed jobId);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+    constructor(address _oracleAddress) {
+        require(_oracleAddress != address(0), "Invalid oracle address");
+        owner = msg.sender;
+        oracle = IReputationOracle(_oracleAddress);
+    }
+
+    // IReputationOracle stub — not used internally, satisfies inheritance
+    function isAgentAuthorizedView(address, address) external pure override returns (bool) {
+        return false;
+    }
+    function checkScore(address) external pure override returns (uint256) {
+        return 0;
+    }
+
+    function createListing(
+        string calldata title,
+        string calldata description,
+        uint256 priceWei
+    ) external returns (uint256) {
+        require(priceWei > 0, "Price must be greater than 0");
+        bool authorized = oracle.isAgentAuthorizedView(msg.sender, address(this));
+        require(authorized, "Agent not authorized by oracle");
+        listingCount++;
+        listings[listingCount] = Listing({
+            id: listingCount,
+            agent: msg.sender,
+            title: title,
+            description: description,
+            priceWei: priceWei,
+            active: true
+        });
+        agentListings[msg.sender].push(listingCount);
+        emit ListingCreated(listingCount, msg.sender, priceWei);
+        return listingCount;
+    }
+
+    /// @notice Deactivating a listing does not affect jobs already in progress
+    function deactivateListing(uint256 listingId) external {
+        require(listings[listingId].agent == msg.sender, "Not listing owner");
+        listings[listingId].active = false;
+        emit ListingDeactivated(listingId);
+    }
+
+    function hireAgent(uint256 listingId) external payable returns (uint256) {
+        Listing memory listing = listings[listingId];
+        require(listing.active, "Listing not active");
+        require(msg.value == listing.priceWei, "Incorrect payment amount");
+        require(msg.sender != listing.agent, "Cannot hire yourself");
+
+        // Check agent is still authorized at hire time
+        bool authorized = oracle.isAgentAuthorizedView(listing.agent, address(this));
+        require(authorized, "Agent no longer authorized");
+
+        jobCount++;
+        jobs[jobCount] = Job({
+            id: jobCount,
+            listingId: listingId,
+            client: msg.sender,
+            agent: listing.agent,
+            amount: msg.value,
+            status: JobStatus.InProgress,
+            createdAt: block.timestamp,
+            disputedAt: 0
+        });
+        clientJobs[msg.sender].push(jobCount);
+        emit JobCreated(jobCount, listingId, msg.sender);
+        return jobCount;
+    }
+
+    function completeJob(uint256 jobId) external {
+        Job storage job = jobs[jobId];
+        require(msg.sender == job.client, "Only client can complete");
+        require(job.status == JobStatus.InProgress, "Job not in progress");
+        require(
+            block.timestamp >= job.createdAt + minJobDuration,
+            "Job must run for minimum duration before completion"
+        );
+        job.status = JobStatus.Completed;
+        uint256 fee = (job.amount * platformFeeBps) / 10000;
+        uint256 agentPayment = job.amount - fee;
+
+        // Pull pattern for fees
+        pendingFees[owner] += fee;
+
+        emit JobCompleted(jobId, job.agent, agentPayment);
+
+        (bool agentPaid, ) = payable(job.agent).call{value: agentPayment}("");
+        require(agentPaid, "Agent payment failed");
+    }
+
+    function disputeJob(uint256 jobId) external {
+        Job storage job = jobs[jobId];
+        require(msg.sender == job.client, "Only client can dispute");
+        require(job.status == JobStatus.InProgress, "Job not in progress");
+        job.status = JobStatus.Disputed;
+        job.disputedAt = block.timestamp;
+        emit JobDisputed(jobId, msg.sender);
+    }
+
+    function resolveDispute(uint256 jobId, bool favorAgent) external onlyOwner {
+        Job storage job = jobs[jobId];
+        require(job.status == JobStatus.Disputed, "Job not disputed");
+        job.status = JobStatus.Completed;
+        uint256 fee = (job.amount * platformFeeBps) / 10000;
+        uint256 winnerPayment = job.amount - fee;
+        address winner = favorAgent ? job.agent : job.client;
+
+        // Pull pattern for fees
+        pendingFees[owner] += fee;
+
+        emit DisputeResolved(jobId, winner, winnerPayment);
+
+        (bool paid, ) = payable(winner).call{value: winnerPayment}("");
+        require(paid, "Payment failed");
+    }
+
+    function claimExpiredDispute(uint256 jobId) external {
+        Job storage job = jobs[jobId];
+        require(job.status == JobStatus.Disputed, "Job not disputed");
+        require(msg.sender == job.agent, "Only agent can claim");
+        require(
+            block.timestamp >= job.disputedAt + maxDisputeWindow,
+            "Dispute window not expired"
+        );
+        job.status = JobStatus.Completed;
+        uint256 fee = (job.amount * platformFeeBps) / 10000;
+        uint256 agentPayment = job.amount - fee;
+
+        // Pull pattern for fees
+        pendingFees[owner] += fee;
+
+        emit DisputeExpired(jobId, job.agent, agentPayment);
+
+        (bool paid, ) = payable(job.agent).call{value: agentPayment}("");
+        require(paid, "Payment failed");
+    }
+
+    function cancelJob(uint256 jobId) external {
+        Job storage job = jobs[jobId];
+        require(msg.sender == job.client, "Only client can cancel");
+        require(job.status == JobStatus.InProgress, "Job not in progress");
+        require(
+            block.timestamp >= job.createdAt + minCancelDelay,
+            "Must wait minimum delay before cancelling"
+        );
+        job.status = JobStatus.Cancelled;
+
+        emit JobCancelled(jobId);
+
+        (bool refunded, ) = payable(job.client).call{value: job.amount}("");
+        require(refunded, "Refund failed");
+    }
+
+    function emergencyCancel(uint256 jobId) external onlyOwner {
+        Job storage job = jobs[jobId];
+        require(
+            job.status == JobStatus.InProgress || job.status == JobStatus.Disputed,
+            "Job not active"
+        );
+        require(
+            block.timestamp >= job.createdAt + maxJobDuration,
+            "Job not stuck yet"
+        );
+        job.status = JobStatus.Cancelled;
+
+        emit EmergencyCancelled(jobId);
+
+        (bool refunded, ) = payable(job.client).call{value: job.amount}("");
+        require(refunded, "Refund failed");
+    }
+
+    function withdrawFees() external onlyOwner {
+        uint256 amount = pendingFees[owner];
+        require(amount > 0, "No fees to withdraw");
+        pendingFees[owner] = 0;
+
+        emit FeeWithdrawn(owner, amount);
+
+        (bool success, ) = payable(owner).call{value: amount}("");
+        require(success, "Fee withdrawal failed");
+    }
+
+    function setPlatformFee(uint256 newFeeBps) external onlyOwner {
+        require(newFeeBps >= 50, "Fee too low");
+        require(newFeeBps <= 1000, "Fee too high");
+        platformFeeBps = newFeeBps;
+        emit PlatformFeeUpdated(newFeeBps);
+    }
+
+    function setMaxDisputeWindow(uint256 newWindow) external onlyOwner {
+        maxDisputeWindow = newWindow;
+        emit MaxDisputeWindowUpdated(newWindow);
+    }
+
+    function setMinJobDuration(uint256 newDuration) external onlyOwner {
+        minJobDuration = newDuration;
+        emit MinJobDurationUpdated(newDuration);
+    }
+
+    function setMinCancelDelay(uint256 newDelay) external onlyOwner {
+        minCancelDelay = newDelay;
+        emit MinCancelDelayUpdated(newDelay);
+    }
+
+    function getAgentListings(address agent) external view returns (uint256[] memory) {
+        return agentListings[agent];
+    }
+
+    function getClientJobs(address client) external view returns (uint256[] memory) {
+        return clientJobs[client];
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+}
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+
+contract AEVToken is ERC20Votes {
+
+    uint256 public constant MAX_SUPPLY = 1_000_000_000 * 10**18;
+    uint256 public constant BURN_BPS = 5000;
+
+    uint256 public totalBurned;
+
+    address public owner;
+    address public feeCollector;
+
+    address public immutable ecosystemWallet;
+    address public immutable daoTreasuryWallet;
+    address public immutable communityWallet;
+    address public immutable teamWallet;
+    address public immutable liquidityWallet;
+    address public immutable investorWallet;
+
+    bool public transfersEnabled = false;
+    bool public paused = false;
+    uint256 public feeBps = 100;
+
+    mapping(address => bool) public isExcludedFromFee;
+    mapping(address => bool) public isWhitelisted;
+
+    event Burned(address indexed from, uint256 amount);
+    event TransfersEnabled();
+    event TransfersPaused();
+    event TransfersUnpaused();
+    event FeeCollectorUpdated(address indexed newCollector);
+    event FeeBpsUpdated(uint256 newFeeBps);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event Whitelisted(address indexed account, bool status);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+    modifier transfersAllowed() {
+        require(!paused, "Transfers paused");
+        require(transfersEnabled || isWhitelisted[msg.sender], "Transfers not enabled yet");
+        _;
+    }
+
+    constructor(
+        address _ecosystemWallet,
+        address _daoTreasuryWallet,
+        address _communityWallet,
+        address _teamWallet,
+        address _liquidityWallet,
+        address _investorWallet
+    ) ERC20("Aevum Protocol", "AEV") EIP712("Aevum Protocol", "1") {
+        require(_ecosystemWallet != address(0), "Invalid ecosystem wallet");
+        require(_daoTreasuryWallet != address(0), "Invalid DAO treasury wallet");
+        require(_communityWallet != address(0), "Invalid community wallet");
+        require(_teamWallet != address(0), "Invalid team wallet");
+        require(_liquidityWallet != address(0), "Invalid liquidity wallet");
+        require(_investorWallet != address(0), "Invalid investor wallet");
+
+        owner = msg.sender;
+        feeCollector = msg.sender;
+
+        ecosystemWallet   = _ecosystemWallet;
+        daoTreasuryWallet = _daoTreasuryWallet;
+        communityWallet   = _communityWallet;
+        teamWallet        = _teamWallet;
+        liquidityWallet   = _liquidityWallet;
+        investorWallet    = _investorWallet;
+
+        isExcludedFromFee[msg.sender]         = true;
+        isExcludedFromFee[_ecosystemWallet]   = true;
+        isExcludedFromFee[_daoTreasuryWallet] = true;
+        isExcludedFromFee[_communityWallet]   = true;
+        isExcludedFromFee[_teamWallet]        = true;
+        isExcludedFromFee[_liquidityWallet]   = true;
+        isExcludedFromFee[_investorWallet]    = true;
+
+        isWhitelisted[msg.sender]         = true;
+        isWhitelisted[_ecosystemWallet]   = true;
+        isWhitelisted[_daoTreasuryWallet] = true;
+        isWhitelisted[_communityWallet]   = true;
+        isWhitelisted[_teamWallet]        = true;
+        isWhitelisted[_liquidityWallet]   = true;
+        isWhitelisted[_investorWallet]    = true;
+
+        _mintVotes(_ecosystemWallet,   MAX_SUPPLY * 30 / 100);
+        _mintVotes(_daoTreasuryWallet, MAX_SUPPLY * 20 / 100);
+        _mintVotes(_communityWallet,   MAX_SUPPLY * 15 / 100);
+        _mintVotes(_teamWallet,        MAX_SUPPLY * 15 / 100);
+        _mintVotes(_liquidityWallet,   MAX_SUPPLY * 10 / 100);
+        _mintVotes(_investorWallet,    MAX_SUPPLY * 10 / 100);
+    }
+
+    function transfer(address to, uint256 amount)
+        public override transfersAllowed returns (bool)
+    {
+        _transferWithFee(msg.sender, to, amount);
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount)
+        public override transfersAllowed returns (bool)
+    {
+        _spendAllowance(from, msg.sender, amount);
+        _transferWithFee(from, to, amount);
+        return true;
+    }
+
+    function increaseAllowance(address spender, uint256 addedValue)
+        public returns (bool)
+    {
+        _approve(msg.sender, spender, allowance(msg.sender, spender) + addedValue);
+        return true;
+    }
+
+    function decreaseAllowance(address spender, uint256 subtractedValue)
+        public returns (bool)
+    {
+        uint256 current = allowance(msg.sender, spender);
+        require(current >= subtractedValue, "Decreased below zero");
+        _approve(msg.sender, spender, current - subtractedValue);
+        return true;
+    }
+
+    function burnTokens(uint256 amount) external {
+        require(balanceOf(msg.sender) >= amount, "Insufficient balance");
+        totalBurned += amount;
+        _burn(msg.sender, amount);
+        emit Burned(msg.sender, amount);
+    }
+
+    function enableTransfers() external onlyOwner {
+        transfersEnabled = true;
+        emit TransfersEnabled();
+    }
+
+    function pauseTransfers() external onlyOwner {
+        paused = true;
+        emit TransfersPaused();
+    }
+
+    function unpauseTransfers() external onlyOwner {
+        paused = false;
+        emit TransfersUnpaused();
+    }
+
+    function setWhitelisted(address account, bool status) external onlyOwner {
+        isWhitelisted[account] = status;
+        emit Whitelisted(account, status);
+    }
+
+    function setFeeCollector(address newCollector) external onlyOwner {
+        require(newCollector != address(0), "Invalid address");
+        feeCollector = newCollector;
+        isExcludedFromFee[newCollector] = true;
+        emit FeeCollectorUpdated(newCollector);
+    }
+
+    function excludeFromFee(address account, bool excluded) external onlyOwner {
+        isExcludedFromFee[account] = excluded;
+    }
+
+    function setFeeBps(uint256 newFeeBps) external onlyOwner {
+        require(newFeeBps <= 500, "Fee too high");
+        feeBps = newFeeBps;
+        emit FeeBpsUpdated(newFeeBps);
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+
+    function _transferWithFee(address from, address to, uint256 amount) internal {
+        if (isExcludedFromFee[from] || isExcludedFromFee[to]) {
+            _transfer(from, to, amount);
+            return;
+        }
+
+        uint256 fee = (amount * feeBps) / 10000;
+        uint256 burnAmount = (fee * BURN_BPS) / 10000;
+        uint256 collectorAmount = fee - burnAmount;
+        uint256 sendAmount = amount - fee;
+
+        _transfer(from, to, sendAmount);
+        _transfer(from, feeCollector, collectorAmount);
+        _burn(from, burnAmount);
+        totalBurned += burnAmount;
+
+        emit Burned(from, burnAmount);
+    }
+
+    function _mintVotes(address to, uint256 amount) internal {
+        require(totalSupply() + amount <= MAX_SUPPLY, "Exceeds max supply");
+        _mint(to, amount);
+    }
+
+    function _update(address from, address to, uint256 amount)
+        internal override(ERC20Votes)
+    {
+        super._update(from, to, amount);
+    }
+}
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+interface IERC20 {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}
+
+contract TokenVesting {
+
+    address public owner;
+    IERC20 public immutable aevToken;
+
+    uint256 public constant MAX_VESTING_DURATION = 4 * 365 days;
+
+    struct VestingSchedule {
+        address beneficiary;
+        uint256 totalAmount;
+        uint256 released;
+        uint256 startTime;
+        uint256 cliffDuration;
+        uint256 vestingDuration;
+        bool revoked;
+        string label;
+    }
+
+    uint256 public scheduleCount;
+    mapping(uint256 => VestingSchedule) public schedules;
+    mapping(address => uint256[]) public beneficiarySchedules;
+
+    event ScheduleCreated(
+        uint256 indexed scheduleId,
+        address indexed beneficiary,
+        uint256 totalAmount,
+        uint256 cliffDuration,
+        uint256 vestingDuration,
+        string label
+    );
+    event TokensReleased(uint256 indexed scheduleId, address indexed beneficiary, uint256 amount);
+    event ScheduleRevoked(uint256 indexed scheduleId, address indexed beneficiary, uint256 returned);
+    event BeneficiaryChanged(uint256 indexed scheduleId, address indexed oldBeneficiary, address indexed newBeneficiary);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+    constructor(address _aevToken) {
+        require(_aevToken != address(0), "Invalid token address");
+        owner = msg.sender;
+        aevToken = IERC20(_aevToken);
+    }
+
+    function createSchedule(
+        address beneficiary,
+        uint256 totalAmount,
+        uint256 cliffDuration,
+        uint256 vestingDuration,
+        string calldata label
+    ) external onlyOwner returns (uint256) {
+        require(beneficiary != address(0), "Invalid beneficiary");
+        require(totalAmount > 0, "Amount must be greater than 0");
+        require(vestingDuration > 0, "Vesting duration must be greater than 0");
+        require(vestingDuration <= MAX_VESTING_DURATION, "Vesting duration too long");
+        require(cliffDuration <= vestingDuration, "Cliff exceeds vesting duration");
+        require(
+            aevToken.balanceOf(address(this)) >= totalAmount,
+            "Insufficient token balance in vesting contract"
+        );
+
+        scheduleCount++;
+        schedules[scheduleCount] = VestingSchedule({
+            beneficiary: beneficiary,
+            totalAmount: totalAmount,
+            released: 0,
+            startTime: block.timestamp,
+            cliffDuration: cliffDuration,
+            vestingDuration: vestingDuration,
+            revoked: false,
+            label: label
+        });
+
+        beneficiarySchedules[beneficiary].push(scheduleCount);
+
+        emit ScheduleCreated(
+            scheduleCount,
+            beneficiary,
+            totalAmount,
+            cliffDuration,
+            vestingDuration,
+            label
+        );
+
+        return scheduleCount;
+    }
+
+    function release(uint256 scheduleId) external {
+        VestingSchedule storage schedule = schedules[scheduleId];
+        require(msg.sender == schedule.beneficiary, "Not beneficiary");
+        require(!schedule.revoked, "Schedule revoked");
+
+        uint256 releasable = _releasableAmount(schedule);
+        require(releasable > 0, "No tokens to release");
+
+        // CEI: update state before transfer
+        schedule.released += releasable;
+
+        emit TokensReleased(scheduleId, schedule.beneficiary, releasable);
+
+        require(aevToken.transfer(schedule.beneficiary, releasable), "Token transfer failed");
+    }
+
+    function revoke(uint256 scheduleId) external onlyOwner {
+        VestingSchedule storage schedule = schedules[scheduleId];
+        require(!schedule.revoked, "Already revoked");
+
+        uint256 releasable = _releasableAmount(schedule);
+        uint256 remaining = schedule.totalAmount - schedule.released - releasable;
+
+        // CEI: update state before transfers
+        schedule.revoked = true;
+        schedule.released += releasable;
+
+        emit ScheduleRevoked(scheduleId, schedule.beneficiary, remaining);
+
+        if (releasable > 0) {
+            require(aevToken.transfer(schedule.beneficiary, releasable), "Beneficiary transfer failed");
+        }
+
+        if (remaining > 0) {
+            require(aevToken.transfer(owner, remaining), "Owner transfer failed");
+        }
+    }
+
+    function changeBeneficiary(uint256 scheduleId, address newBeneficiary) external {
+        VestingSchedule storage schedule = schedules[scheduleId];
+        require(
+            msg.sender == schedule.beneficiary || msg.sender == owner,
+            "Not authorized"
+        );
+        require(newBeneficiary != address(0), "Invalid address");
+        require(!schedule.revoked, "Schedule revoked");
+
+        address oldBeneficiary = schedule.beneficiary;
+        schedule.beneficiary = newBeneficiary;
+        beneficiarySchedules[newBeneficiary].push(scheduleId);
+
+        emit BeneficiaryChanged(scheduleId, oldBeneficiary, newBeneficiary);
+    }
+
+    function releasableAmount(uint256 scheduleId) external view returns (uint256) {
+        return _releasableAmount(schedules[scheduleId]);
+    }
+
+    function vestedAmount(uint256 scheduleId) external view returns (uint256) {
+        return _vestedAmount(schedules[scheduleId]);
+    }
+
+    function getBeneficiarySchedules(address beneficiary) external view returns (uint256[] memory) {
+        return beneficiarySchedules[beneficiary];
+    }
+
+    function _releasableAmount(VestingSchedule storage schedule) internal view returns (uint256) {
+        return _vestedAmount(schedule) - schedule.released;
+    }
+
+    function _vestedAmount(VestingSchedule storage schedule) internal view returns (uint256) {
+        if (schedule.revoked) {
+            return schedule.released;
+        }
+
+        uint256 elapsed = block.timestamp - schedule.startTime;
+
+        if (elapsed < schedule.cliffDuration) {
+            return 0;
+        }
+
+        if (elapsed >= schedule.vestingDuration) {
+            return schedule.totalAmount;
+        }
+
+        return (schedule.totalAmount * elapsed) / schedule.vestingDuration;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+}
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+interface IVotes {
+    function getPastVotes(address account, uint256 timepoint) external view returns (uint256);
+    function getPastTotalSupply(uint256 timepoint) external view returns (uint256);
+}
+
+contract AevumDAO {
+
+    address public owner;
+    IVotes public immutable aevToken;
+
+    uint256 public proposalCount;
+    uint256 public votingPeriod = 7 days;
+    uint256 public timelockDelay = 48 hours;
+    uint256 public executionDeadline = 30 days;
+    uint256 public quorumVotes;
+    uint256 public constant MIN_QUORUM = 10_000_000 * 10**18;
+    uint256 public constant MIN_PROPOSAL_TOKENS = 1_000_000 * 10**18;
+
+    // Whitelist of contracts that can be targeted by governance
+    mapping(address => bool) public approvedTargets;
+
+    enum ProposalState { Active, Queued, Failed, Executed, Cancelled, Expired }
+
+    struct Proposal {
+        uint256 id;
+        address proposer;
+        string title;
+        string description;
+        address target;
+        bytes callData;
+        uint256 forVotes;
+        uint256 againstVotes;
+        uint256 startTime;
+        uint256 endTime;
+        uint256 executionTime;
+        uint256 snapshotBlock;
+        ProposalState state;
+    }
+
+    mapping(uint256 => Proposal) public proposals;
+    mapping(uint256 => mapping(address => bool)) public hasVoted;
+    mapping(uint256 => mapping(address => uint256)) public snapshotBalances;
+
+    event ProposalCreated(
+        uint256 indexed proposalId,
+        address indexed proposer,
+        string title,
+        address target
+    );
+    event VoteCast(
+        uint256 indexed proposalId,
+        address indexed voter,
+        bool support,
+        uint256 weight
+    );
+    event ProposalQueued(uint256 indexed proposalId, uint256 executionTime);
+    event ProposalExecuted(uint256 indexed proposalId);
+    event ProposalCancelled(uint256 indexed proposalId);
+    event ProposalExpired(uint256 indexed proposalId);
+    event QuorumUpdated(uint256 newQuorum);
+    event VotingPeriodUpdated(uint256 newPeriod);
+    event TimelockDelayUpdated(uint256 newDelay);
+    event ExecutionDeadlineUpdated(uint256 newDeadline);
+    event TargetApproved(address indexed target, bool approved);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+    constructor(address _aevToken, uint256 _quorumVotes) {
+        require(_quorumVotes >= MIN_QUORUM, "Below minimum quorum");
+        require(_aevToken != address(0), "Invalid token address");
+        owner = msg.sender;
+        aevToken = IVotes(_aevToken);
+        quorumVotes = _quorumVotes;
+    }
+
+    function approveTarget(address target, bool approved) external onlyOwner {
+        require(target != address(0), "Invalid target");
+        approvedTargets[target] = approved;
+        emit TargetApproved(target, approved);
+    }
+
+    function propose(
+        string calldata title,
+        string calldata description,
+        address target,
+        bytes calldata callData
+    ) external returns (uint256) {
+        // Use past votes to prevent flash loan attacks
+        uint256 votes = aevToken.getPastVotes(msg.sender, block.number - 1);
+        require(votes >= MIN_PROPOSAL_TOKENS, "Need 1,000,000 AEV voting power to propose");
+        require(approvedTargets[target], "Target not approved for governance");
+
+        proposalCount++;
+
+        proposals[proposalCount] = Proposal({
+            id: proposalCount,
+            proposer: msg.sender,
+            title: title,
+            description: description,
+            target: target,
+            callData: callData,
+            forVotes: 0,
+            againstVotes: 0,
+            startTime: block.timestamp,
+            endTime: block.timestamp + votingPeriod,
+            executionTime: 0,
+            snapshotBlock: block.number - 1,
+            state: ProposalState.Active
+        });
+
+        emit ProposalCreated(proposalCount, msg.sender, title, target);
+        return proposalCount;
+    }
+
+    function vote(uint256 proposalId, bool support) external {
+        Proposal storage proposal = proposals[proposalId];
+        require(proposal.state == ProposalState.Active, "Proposal not active");
+        require(block.timestamp <= proposal.endTime, "Voting period ended");
+        require(!hasVoted[proposalId][msg.sender], "Already voted");
+
+        // Use snapshot balance to prevent double voting
+        uint256 weight = aevToken.getPastVotes(msg.sender, proposal.snapshotBlock);
+        require(weight > 0, "No voting power at snapshot");
+
+        hasVoted[proposalId][msg.sender] = true;
+
+        if (support) {
+            proposal.forVotes += weight;
+        } else {
+            proposal.againstVotes += weight;
+        }
+
+        emit VoteCast(proposalId, msg.sender, support, weight);
+    }
+
+    function finalize(uint256 proposalId) external {
+        Proposal storage proposal = proposals[proposalId];
+        require(proposal.state == ProposalState.Active, "Proposal not active");
+        require(block.timestamp > proposal.endTime, "Voting still active");
+
+        uint256 totalVotes = proposal.forVotes + proposal.againstVotes;
+
+        if (totalVotes >= quorumVotes && proposal.forVotes > proposal.againstVotes) {
+            proposal.state = ProposalState.Queued;
+            proposal.executionTime = block.timestamp + timelockDelay;
+            emit ProposalQueued(proposalId, proposal.executionTime);
+        } else {
+            proposal.state = ProposalState.Failed;
+        }
+    }
+
+    function execute(uint256 proposalId) external {
+        Proposal storage proposal = proposals[proposalId];
+        require(proposal.state == ProposalState.Queued, "Proposal not queued");
+        require(block.timestamp >= proposal.executionTime, "Timelock delay not met");
+        require(
+            block.timestamp <= proposal.executionTime + executionDeadline,
+            "Execution window expired"
+        );
+
+        // Emit before external call
+        proposal.state = ProposalState.Executed;
+        emit ProposalExecuted(proposalId);
+
+        (bool success, ) = proposal.target.call(proposal.callData);
+        require(success, "Execution failed");
+    }
+
+    function expireProposal(uint256 proposalId) external {
+        Proposal storage proposal = proposals[proposalId];
+        require(proposal.state == ProposalState.Queued, "Proposal not queued");
+        require(
+            block.timestamp > proposal.executionTime + executionDeadline,
+            "Execution window not expired"
+        );
+        proposal.state = ProposalState.Expired;
+        emit ProposalExpired(proposalId);
+    }
+
+    function cancel(uint256 proposalId) external {
+        Proposal storage proposal = proposals[proposalId];
+
+        if (proposal.state == ProposalState.Queued) {
+            // Only proposer can cancel a queued proposal
+            require(msg.sender == proposal.proposer, "Only proposer can cancel queued proposal");
+        } else if (proposal.state == ProposalState.Active) {
+            // Proposer or owner can cancel active proposals
+            require(
+                msg.sender == proposal.proposer || msg.sender == owner,
+                "Not proposer or owner"
+            );
+        } else {
+            revert("Cannot cancel");
+        }
+
+        proposal.state = ProposalState.Cancelled;
+        emit ProposalCancelled(proposalId);
+    }
+
+    function setQuorum(uint256 newQuorum) external onlyOwner {
+        require(newQuorum >= MIN_QUORUM, "Below minimum quorum");
+        quorumVotes = newQuorum;
+        emit QuorumUpdated(newQuorum);
+    }
+
+    function setVotingPeriod(uint256 newPeriod) external onlyOwner {
+        require(newPeriod >= 1 days, "Period too short");
+        votingPeriod = newPeriod;
+        emit VotingPeriodUpdated(newPeriod);
+    }
+
+    function setTimelockDelay(uint256 newDelay) external onlyOwner {
+        require(newDelay >= 24 hours, "Delay too short");
+        timelockDelay = newDelay;
+        emit TimelockDelayUpdated(newDelay);
+    }
+
+    function setExecutionDeadline(uint256 newDeadline) external onlyOwner {
+        require(newDeadline >= 1 days, "Deadline too short");
+        executionDeadline = newDeadline;
+        emit ExecutionDeadlineUpdated(newDeadline);
+    }
+
+    function getProposalState(uint256 proposalId) external view returns (ProposalState) {
+        return proposals[proposalId].state;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+}
+# Aevum Protocol — Known Limitations & Design Decisions
+**Prepared for:** Zenith Security (Mario Poneder, adriro)  
+**Date:** July 6, 2026 (updated)  
+**Commit:** See SOW commit hash 63f7d568bf814ae23f07559990e0d7f7cb96adc0
+
+---
+
+## Intentional Design Decisions
+
+### 1. Single EOA deployer wallet
+All 8 contracts are currently owned by deployer wallet `0xb57dC33a8E2B54ed025C28ef2080648f35875a2E`. 
+This is a known risk for mainnet. Before mainnet deployment, ownership will be transferred to a Gnosis Safe multisig. The mainnet deployment runbook includes this step explicitly.
+
+### 2. Dead oracle address in ReputationController
+The constructor requires 2 oracle addresses. On Sepolia testnet, `oracle2` is set to `0x000000000000000000000000000000000000dEaD`. This is intentional for testnet demonstration purposes. On mainnet, both oracles will be real addresses controlled by trusted parties.
+
+### 3. ReputationController dynamic majority
+`requiredApprovals()` returns `(oracleCount / 2) + 1`. With 2 oracles this means both must approve. This is intentional — unanimous consent at the minimum oracle count is the most conservative possible threshold.
+
+### 4. AevumDAO target whitelist
+`propose()` requires `approvedTargets[target] == true`. No targets are whitelisted on testnet deployment. This is intentional — governance proposals can only execute against pre-approved contracts. On mainnet, the 8 protocol contracts will be approved targets.
+
+### 5. AEVToken transfers disabled by default
+`transfersEnabled = false` at deployment. Only whitelisted addresses (allocation wallets) can transfer. This is intentional — prevents speculation before the protocol is live. `enableTransfers()` is called by owner at TGE.
+
+### 6. ERC20Votes snapshot voting
+`vote()` uses `getPastVotes(voter, proposal.snapshotBlock)` where `snapshotBlock = block.number - 1` at proposal creation. This is the standard OpenZeppelin Votes pattern. Users must self-delegate before the snapshot block to have voting power.
+
+### 7. AgentIdentity `reputationController` post-deploy setup
+`reputationController` starts as `address(0)` and must be set via `setReputationController()` after deployment. Until set, `updateReputation()` reverts. The deployment script sets this atomically. This is a known deployment dependency, not a vulnerability.
+
+### 8. Per-transaction withdraw limit in AgentVault
+`agentWithdrawLimits` is a per-transaction ceiling, not a daily reset. `agentTotalWithdrawn` accumulates lifetime. This is intentional — the semantics are documented. If daily limits are needed, this is flagged as a V2 feature.
+
+### 9. Cooldown bypass on first withdrawal
+First-time withdrawers bypass the cooldown check because `agentInitialized[address]` defaults to false. After the first withdrawal, `agentInitialized` is set to true and cooldown enforced on all subsequent withdrawals. This is intentional — the first withdrawal establishes the baseline timestamp.
+
+### 10. AgentMarketplace pull payment for owner fees
+Platform fees accumulate in `pendingFees[owner]` and require a separate `withdrawFees()` call. This is intentional — prevents fee payment failure from bricking job completions.
+
+
+### 11. Oracle trust concentration — V1 reputation scores are ADVISORY
+**This is the most important framing clarification before Zenith kickoff.**
+
+V1 reputation scores are advisory, not trustless. At launch there is a single trusted operator (the deployer). The `ReputationController` multi-oracle architecture exists and is correctly implemented, but with only 2 oracles (deployer + dead address on testnet), the system is operationally centralized.
+
+Do NOT use "multi-oracle consensus" language in marketing or external docs until the operator set genuinely decentralizes. Zenith should evaluate this contract in the context of a single-operator trust model, not a decentralized consensus model.
+
+**V1→V2 transition trigger uses AND logic, not OR.** Multi-oracle consensus only activates when ALL THREE conditions are met simultaneously:
+- (a) 3+ independent operators onboarded
+- (b) Quorum set to require 2-of-3 minimum agreement
+- (c) Each operator active for 30+ days
+
+Time alone cannot trigger the transition. A 6-month timer hitting before operators are onboarded would change the label without changing the reality. The contract is correct — this is an operational framing issue, not a code issue.
+
+### 12. AgentVault exposure cap recommendation
+Until the oracle operator set genuinely distributes beyond a single trusted party, per-agent vault exposure should be treated as carrying concentrated trust risk. Recommended: cap individual agent vault exposure at 1 ETH until V2 oracle decentralization is live.
+
+This limits blast radius if the trust assumption breaks. Flagged to Zenith as a pre-kickoff risk reduction consideration — not a missing feature, just a safety bound appropriate for the V1 trust model.
+
+**Status:** Under evaluation — may add as a configurable owner-settable cap before audit kickoff.
+
+### 13. Sybil resistance gap
+Current `ReputationOracle` accrues score from interaction history without sufficient cost to fake interactions. A stake deposit is necessary but not sufficient — a slashable bond or economically expensive-to-counterfeit activity proof is needed to make sybil farming irrational rather than just expensive.
+
+There is no clean V1 answer to this. The gap is:
+- Stake deposit creates cost to register
+- But repeated self-interactions can inflate score without real counterparty risk
+- Slashable bond (V2) is the correct fix — reputation is only worth what it costs to fake
+
+Flagged explicitly for Zenith as a known architectural gap. V2 roadmap item.
+
+### 14. Oracle operator fail-safe
+`ReputationController` has quorum requirements but no automatic manipulation detection. Manual pause via owner `AccessControl` exists but is reactive, not preventive. If the operator set is small enough that collusion is cheap (as it is in V1 with 2 oracles), quorum alone is insufficient protection against coordinated reputation manipulation.
+
+Mitigating factors in V1: single operator means collusion is moot (there is no second party to collude with). This becomes a real concern at 2-3 operators before genuine decentralization.
+
+### 15. Stake deposit governance-adjustability
+Needs verification: if stake deposit is hardcoded in `AgentIdentity.sol` rather than governance-adjustable, this should be flagged as a V2 addition. A hardcoded deposit amount cannot respond to ETH price changes or evolving sybil resistance requirements.
+
+**Action item:** Verify with `grep -i "stake\|deposit" contracts/AgentIdentity.sol` before Zenith kickoff.
+
+---
+
+## Accepted Deferrals (V2)
+
+These were raised during internal review and explicitly deferred:
+
+| ID | Contract | Finding | Disposition |
+|---|---|---|---|
+| LOW-02 | ReputationOracle | `defaultMinScore = 100` equals genesis agent score | V2: raise default |
+| LOW-03 | AgentVault | Withdraw limit is per-tx, semantics unclear | Documented above |
+| LOW-05 | AgentMarketplace | No cap on listings per agent | V2: add cap |
+| LOW-06 | ReputationController | No proposal expiry window | V2: add expiry |
+| INFO | TokenVesting | `revoke()` transfer returns not checked | Low risk: AEVToken reverts on failure |
+| INFO | AgentMarketplace | `cancelJob` refunds full amount (no fee) | Intentional |
+| INFO | AevumDAO | Snapshot at `block.number - 1` | Standard OZ pattern |
+
+---
+
+## Known Attack Surfaces (Auditor Focus Areas)
+
+1. **ReputationController consensus** — can a single oracle manipulate reputation with minimum oracle count?
+2. **AevumDAO execution** — arbitrary `target.call(callData)` after timelock. Approved target whitelist is the primary guard.
+3. **AgentVault accounting** — `totalDeposited` tracking correctness across deposit/withdraw/rescueETH paths.
+4. **AEVToken fee math** — two-step fee calculation: `fee = (amount * feeBps) / 10000` then `burnAmount = (fee * BURN_BPS) / 10000`. Slither flags as divide-before-multiply but these are independent calculations, not chained.
+5. **ERC20Votes integration** — `_update()` override correctness, `getPastVotes()` snapshot consistency.
+6. **Oracle trust concentration** — V1 is single-operator in practice. Evaluate all reputation-gated paths under this assumption, not multi-oracle consensus.
+7. **Sybil resistance** — stake deposit alone does not prevent score inflation via self-interactions. No clean V1 fix. Evaluate blast radius if score is gamed.
+
+---
+
+## Out of Scope
+
+- Gas optimization (V2)
+- Gas abstraction layer (whitepaper item, V2)
+- Frontend/off-chain components
+- Deployment scripts
+
+---
+
+*Aevum Protocol — github.com/AevumProtocol/contracts*
+# Aevum Protocol — Technical Documentation
+**Version:** 1.0  
+**Date:** June 30, 2026  
+**Network:** Ethereum Sepolia (testnet) — mainnet pending Zenith audit  
+
+---
+
+## Overview
+
+Aevum Protocol is a blockchain infrastructure layer for autonomous AI agents. It provides on-chain identity, reputation scoring, economic primitives, and governance — purpose-built for AI agents operating autonomously across DeFi and Web3 protocols.
+
+---
+
+## Contract Stack
+
+### 1. AgentIdentity.sol
+**Address:** `0xF6CEc60C9dD6aa283D42fE5D38537303F9bE231B`  
+**Purpose:** On-chain identity registry for AI agents.
+
+**Key state:**
+- `_agents` — mapping of agentId → AgentRecord struct
+- `_ownerToAgentId` — mapping of wallet → agentId (one agent per wallet)
+- `reputationController` — address authorized to call `updateReputation()`
+- `approvedCertIssuers` — addresses allowed to issue performance certificates
+
+**Key functions:**
+- `registerAgent(bytes32 strategyHash, string metadataURI, ExecutionPolicy policy)` — registers a new agent, agentId starts at 1, 0 is sentinel
+- `updateReputation(uint256 agentId, uint256 newScore)` — only callable by `reputationController`
+- `addPerformanceCert(uint256 agentId, bytes32 certHash, string metadataURI)` — only callable by approved cert issuers
+- `deactivateAgent(uint256 agentId)` — clears both `_agents[id].owner` and `_ownerToAgentId[wallet]`
+- `getAgentByAddress(address)` — returns 0 if not registered
+
+**Access control:** Owner sets `reputationController` and `approvedCertIssuers`. One agent per wallet enforced.
+
+---
+
+### 2. ReputationOracle.sol
+**Address:** `0xAda16c3ca238BE164E716F280D3D184269e4A0A9`  
+**Purpose:** Read-only gateway that other protocols query to check agent authorization.
+
+**Key state:**
+- `defaultMinScore` — score floor for unregistered protocols (default: 100)
+- `protocolMinScores` — per-protocol score thresholds
+- `registeredProtocols` — whitelist of protocols with custom thresholds
+
+**Key functions:**
+- `isAgentAuthorizedView(address agent, address protocol)` — view function, returns bool, used by AgentVault and AgentMarketplace
+- `isAgentAuthorized(address agent, address protocol)` — state-changing version, emits events
+- `checkScore(address agent)` — returns 0 for unregistered agents (does not revert)
+- `registerProtocol(address, uint256 minScore)` — requires minScore > 0
+- `deregisterProtocol(address)` — removes protocol from registry
+- `setDefaultMinScore(uint256)` — requires > 0
+
+**Note:** Both AgentVault and AgentMarketplace use `isAgentAuthorizedView` (view) not `isAgentAuthorized` (state-changing) to avoid reentrancy vectors.
+
+---
+
+### 3. ReputationController.sol
+**Address:** `0x09D6D8Bb81140E8395Af7b6bc954b0Ab053dd121`  
+**Purpose:** Multi-oracle consensus system for updating agent reputation scores.
+
+**Key state:**
+- `authorizedOracles` — mapping of oracle addresses
+- `oracleCount` — current oracle count (minimum 2 enforced)
+- `proposalExpiry` — proposals expire after 7 days (default)
+- `minVotingWindow` — minimum 1 hour before execution after creation
+- `MAX_SCORE_DELTA` — 200 points maximum change per proposal
+
+**Key functions:**
+- `proposeReputationUpdate(uint256 agentId, uint256 newScore)` — creates proposal, auto-approves by proposer
+- `approveProposal(uint256 proposalId)` — oracle approval, executes when threshold met
+- `cancelProposal(uint256 proposalId)` — owner or any oracle can cancel
+- `requiredApprovals()` — dynamic: `(oracleCount / 2) + 1`
+
+**Consensus logic:** Proposals auto-execute when `approvals >= requiredApprovals()` AND `block.timestamp >= createdAt + minVotingWindow`. Score delta capped at 200 points per update.
+
+---
+
+### 4. AgentVault.sol
+**Address:** `0x58B0f345212c147eC67697609aE00ddee951C47c`  
+**Purpose:** ETH treasury gated by reputation. Authorized agents can withdraw up to their limit per cooldown period.
+
+**Key state:**
+- `totalDeposited` — tracks all intentional deposits (deposit() + receive())
+- `defaultWithdrawLimit` — per-tx ETH ceiling for agents without custom limit
+- `cooldownPeriod` — time between withdrawals (default: 1 day, minimum: 1 hour)
+- `agentInitialized` — tracks whether an agent has ever withdrawn (cooldown bypass on first withdrawal is intentional)
+- `blacklistedAgentIds` — agentId-based blacklist (in addition to address-based)
+
+**Key functions:**
+- `deposit()` / `receive()` — both increment `totalDeposited`
+- `withdraw(uint256 amount)` — checks oracle authorization, limit, cooldown
+- `rescueETH()` — owner only, sends `address(this).balance - totalDeposited` (surplus only)
+- `getSurplusETH()` — returns 0 if balance <= totalDeposited (no underflow)
+
+**Accounting invariant:** `totalDeposited` always equals sum of all deposits minus sum of all withdrawals. ETH sent via SELFDESTRUCT lands in surplus bucket (rescuable without touching agent funds).
+
+---
+
+### 5. AgentMarketplace.sol
+**Address:** `0xff7A5eBb3ab2C1E92A58B7b6F25CCB6588785Af9`  
+**Purpose:** On-chain service marketplace. Agents list services, clients pay in ETH, escrow held in contract.
+
+**Key state:**
+- `platformFeeBps` — fee in basis points (default: 250 = 2.5%, min: 50, max: 1000)
+- `pendingFees` — pull payment mapping for owner fees
+- `maxJobDuration` — constant 90 days (emergency cancel threshold)
+- `minCancelDelay` — configurable (default: 7 days)
+- `minJobDuration` — configurable (default: 1 hour)
+
+**Job lifecycle:** `InProgress` → `Completed` | `Disputed` | `Cancelled`
+
+**Key functions:**
+- `createListing()` — requires oracle authorization at listing time
+- `hireAgent()` — checks oracle authorization again at hire time (agent could be de-authorized between listing and hire)
+- `completeJob()` — client confirms completion, fee goes to `pendingFees[owner]`
+- `disputeJob()` — client raises dispute, starts `maxDisputeWindow` timer
+- `resolveDispute(bool favorAgent)` — owner resolves, fee goes to `pendingFees[owner]`
+- `claimExpiredDispute()` — agent claims after `maxDisputeWindow` if unresolved
+- `cancelJob()` — client cancels after `minCancelDelay`, full refund, no fee
+- `emergencyCancel()` — owner cancels stuck jobs after `maxJobDuration`
+- `withdrawFees()` — owner claims accumulated fees
+
+**Fee flow:** All payment paths (completeJob, resolveDispute, claimExpiredDispute) use pull pattern for owner fees. Agent/client payments are push (immediate ETH transfer).
+
+---
+
+### 6. AEVToken.sol
+**Address:** `0x1C47FE8AE5531008Ec57fC60C7498Ebf2c2Ac920`  
+**Purpose:** Native protocol token. Inherits OpenZeppelin ERC20Votes for governance snapshot voting.
+
+**Key state:**
+- `MAX_SUPPLY` — 1,000,000,000 × 10^18 (hard cap, enforced in `_mintVotes`)
+- `BURN_BPS` — 5000 (50% of fees burned)
+- `transfersEnabled` — false at deployment
+- `paused` — emergency pause (independent of transfersEnabled)
+- `isExcludedFromFee` — fee exclusion (does NOT grant transfer permission)
+- `isWhitelisted` — transfer permission before `enableTransfers()` (separate from fee exclusion)
+
+**Fee math (two independent calculations, not chained):**
+**Token allocations at deployment:**
+- 30% Ecosystem — `_ecosystemWallet`
+- 20% DAO Treasury — `_daoTreasuryWallet`
+- 15% Community — `_communityWallet`
+- 15% Team — `_teamWallet`
+- 10% Liquidity — `_liquidityWallet`
+- 10% Investors — `_investorWallet`
+
+**ERC20Votes:** Inherits OpenZeppelin v5 ERC20Votes. Users must self-delegate (`delegate(address)`) to activate voting power. Snapshot at `block.number - 1` at proposal creation time.
+
+---
+
+### 7. TokenVesting.sol
+**Address:** `0x482C01015E7a845BBd923d18eF627D90448b9d2c`  
+**Purpose:** Time-locked vesting for team and investor token allocations.
+
+**Key constraints:**
+- `MAX_VESTING_DURATION` — 4 years (constant)
+- Cliff must be ≤ vesting duration
+- `revoke()` sends vested-but-unreleased tokens to beneficiary, remaining to owner
+
+**CEI pattern:** Both `release()` and `revoke()` update state before external transfers. `schedule.revoked = true` and `schedule.released += releasable` set before any `aevToken.transfer()` calls.
+
+**Key functions:**
+- `createSchedule()` — owner only, checks contract has sufficient token balance
+- `release()` — beneficiary claims vested tokens
+- `revoke()` — owner cancels schedule, distributes proportionally
+- `changeBeneficiary()` — beneficiary or owner can update beneficiary address
+
+---
+
+### 8. AevumDAO.sol
+**Address:** `0x11205fdFC73Bc7527C2fDc68E7369fcC1f6144dD`  
+**Purpose:** Token-holder governance with snapshot voting and timelock execution.
+
+**Key parameters:**
+- `MIN_PROPOSAL_TOKENS` — 1,000,000 AEV voting power (past votes, not live balance)
+- `MIN_QUORUM` — 10,000,000 AEV (constant floor, `setQuorum` enforces this minimum)
+- `votingPeriod` — 7 days (default)
+- `timelockDelay` — 48 hours (default, minimum 24 hours)
+- `executionDeadline` — 30 days (queued proposals expire after this)
+- `approvedTargets` — whitelist of contracts that can be called via governance
+
+**Proposal lifecycle:** `Active` → `Queued` | `Failed` → `Executed` | `Expired` | `Cancelled`
+
+**Flash loan protection:** `propose()` uses `getPastVotes(msg.sender, block.number - 1)`. Flash loans cannot affect past block balances.
+
+**Cancel restrictions:** Only proposer can cancel `Queued` proposals. Owner OR proposer can cancel `Active` proposals. Owner cannot veto passed proposals.
+
+**Execution:** State set to `Executed` and event emitted BEFORE `target.call(callData)`. Target must be in `approvedTargets`.
+
+---
+
+## Deployment Order (Dependency Graph)
+**Post-deploy setup required:**
+- `AgentIdentity.setReputationController(ReputationController.address)`
+
+---
+
+## Technology Stack
+
+| Component | Version |
+|---|---|
+| Solidity | ^0.8.28 |
+| EVM Target | Cancun (required for OZ v5 ERC20Votes `mcopy` opcode) |
+| OpenZeppelin | v5 (ERC20Votes, EIP712) |
+| Hardhat | 2.22 |
+| Optimizer | 200 runs, viaIR: true |
+| Node.js | v26.0.0 |
+
+---
+
+## External Dependencies
+
+- **OpenZeppelin v5** — ERC20Votes, EIP712 (AEVToken only). All other contracts are dependency-free vanilla Solidity.
+- **Alchemy** — Sepolia RPC for deployment and frontend
+- **Etherscan** — source verification (all 8 contracts verified)
+
+---
+
+*Aevum Protocol — github.com/AevumProtocol/contracts*  
+*Zenith Security audit in progress — Mario Poneder + adriro*
+# Aevum Protocol — Mainnet Deployment Runbook
+**Status:** Draft — pending Zenith Security audit completion  
+**Target:** ETHOnline 2026 (September 4–16)  
+
+---
+
+## Pre-Deployment Checklist
+
+### Security
+- [ ] Zenith Security audit complete — all findings resolved
+- [ ] Final Slither pass on mainnet-targeted code — 0 HIGH/MEDIUM
+- [ ] Code4rena community audit period closed
+- [ ] All audit findings documented and responses written
+
+### Infrastructure
+- [ ] Gnosis Safe multisig deployed on Ethereum mainnet
+  - Recommended: 3-of-5 signers minimum
+  - Signers: founder + advisors (not same device)
+  - Safe address recorded before deployment begins
+- [ ] Mainnet Alchemy RPC endpoint configured
+- [ ] Etherscan mainnet API key ready
+- [ ] Deployer wallet funded (estimate: ~0.5 ETH for gas)
+- [ ] Hardware wallet connected (Ledger/Trezor recommended for mainnet)
+
+### Token
+- [ ] All 6 allocation wallet addresses confirmed with recipients
+- [ ] Vesting schedules agreed and documented
+- [ ] TokenVesting contract funded with team + investor allocations before cliff starts
+
+---
+
+## Gas Estimates (Ethereum Mainnet)
+
+| Contract | Estimated Gas | @ 20 gwei | @ 50 gwei |
+|---|---|---|---|
+| AgentIdentity | ~800,000 | 0.016 ETH | 0.040 ETH |
+| AEVToken | ~2,500,000 | 0.050 ETH | 0.125 ETH |
+| ReputationOracle | ~600,000 | 0.012 ETH | 0.030 ETH |
+| AgentVault | ~700,000 | 0.014 ETH | 0.035 ETH |
+| AgentMarketplace | ~900,000 | 0.018 ETH | 0.045 ETH |
+| ReputationController | ~750,000 | 0.015 ETH | 0.038 ETH |
+| TokenVesting | ~650,000 | 0.013 ETH | 0.033 ETH |
+| AevumDAO | ~800,000 | 0.016 ETH | 0.040 ETH |
+| **Total** | **~7,700,000** | **~0.154 ETH** | **~0.386 ETH** |
+
+**Recommendation:** Budget 0.5 ETH for deployment + post-deploy setup transactions.
+
+---
+
+## Deployment Steps
+
+### Step 1 — Deploy AgentIdentity
+```bash
+npx hardhat run scripts/deploy.js --network mainnet
+```
+Record address. Do NOT call `setReputationController` yet.
+
+### Step 2 — Deploy AEVToken
+```bash
+npx hardhat run scripts/deployToken.js --network mainnet
+```
+Provide all 6 real allocation wallet addresses (NOT deployer wallet).  
+**Verify immediately** — token supply is minted in constructor.
+
+### Step 3 — Deploy ReputationOracle
+```bash
+npx hardhat run scripts/deployOracle.js --network mainnet
+```
+Constructor arg: AgentIdentity address from Step 1.
+
+### Step 4 — Deploy AgentVault
+```bash
+npx hardhat run scripts/deployVault.js --network mainnet
+```
+Constructor args: ReputationOracle address, defaultWithdrawLimit (recommend: 0.1 ETH).
+
+### Step 5 — Deploy AgentMarketplace
+```bash
+npx hardhat run scripts/deployMarketplace.js --network mainnet
+```
+Constructor arg: ReputationOracle address.
+
+### Step 6 — Deploy ReputationController
+```bash
+npx hardhat run scripts/deployReputationController.js --network mainnet
+```
+Constructor args: AgentIdentity address, oracle1 address, oracle2 address.  
+**Both oracle addresses must be real, distinct, non-zero addresses on mainnet.**
+
+### Step 7 — Deploy TokenVesting
+```bash
+npx hardhat run scripts/deployVesting.js --network mainnet
+```
+Constructor arg: AEVToken address.
+
+### Step 8 — Deploy AevumDAO
+```bash
+npx hardhat run scripts/deployDAO.js --network mainnet
+```
+Constructor args: AEVToken address, quorumVotes (10,000,000 × 10^18 minimum).
+
+---
+
+## Post-Deployment Setup
+
+### Step 9 — Wire AgentIdentity to ReputationController
+```bash
+# Call AgentIdentity.setReputationController(ReputationController.address)
+```
+This is the critical wiring step. Until this is done, reputation updates will revert.
+
+### Step 10 — Transfer all ownership to Gnosis Safe
+```bash
+# Call transferOwnership(GNOSIS_SAFE_ADDRESS) on all 8 contracts
+# Order doesn't matter, but complete all 8 before announcing
+```
+Contracts to transfer:
+- AgentIdentity
+- ReputationOracle
+- AgentVault
+- AgentMarketplace
+- ReputationController
+- TokenVesting
+- AevumDAO
+- AEVToken (transfer last — verify Safe can call enableTransfers())
+
+### Step 11 — Approve DAO governance targets
+```bash
+# From Gnosis Safe:
+# AevumDAO.approveTarget(AgentIdentity.address, true)
+# AevumDAO.approveTarget(ReputationOracle.address, true)
+# AevumDAO.approveTarget(AgentVault.address, true)
+# AevumDAO.approveTarget(AgentMarketplace.address, true)
+# AevumDAO.approveTarget(ReputationController.address, true)
+# AevumDAO.approveTarget(AevumDAO.address, true)
+```
+
+### Step 12 — Register protocols in ReputationOracle
+```bash
+# From Gnosis Safe:
+# ReputationOracle.registerProtocol(AgentVault.address, 100)
+# ReputationOracle.registerProtocol(AgentMarketplace.address, 200)
+```
+
+### Step 13 — Fund TokenVesting contract
+Transfer team and investor AEV allocations to TokenVesting contract address before creating schedules.
+
+### Step 14 — Create vesting schedules
+```bash
+# TokenVesting.createSchedule(teamWallet, amount, cliff, duration, "Team")
+# TokenVesting.createSchedule(investorWallet, amount, cliff, duration, "Investors")
+```
+
+### Step 15 — Verify all 8 contracts on Etherscan
+```bash
+npx hardhat verify --network mainnet <address> <constructor args>
+```
+
+### Step 16 — Enable AEV token transfers
+```bash
+# From Gnosis Safe:
+# AEVToken.enableTransfers()
+```
+This is the TGE moment. Do not call until all other steps are complete.
+
+---
+
+## Admin Role Structure (Mainnet)
+
+| Role | Held By | Actions |
+|---|---|---|
+| Contract owner (all 8) | Gnosis Safe multisig | All admin functions |
+| ReputationController oracle 1 | Founder wallet (hardware wallet) | Propose/approve reputation updates |
+| ReputationController oracle 2 | Trusted advisor wallet | Approve reputation updates |
+| AEV fee collector | Gnosis Safe | Receives fee collector share |
+
+---
+
+## Rollback Plan
+
+If a critical issue is discovered post-deployment:
+
+1. **Pause AEVToken** — `pauseTransfers()` from Gnosis Safe
+2. **Disable vault withdrawals** — `blacklistAgent` on all agents or set `defaultWithdrawLimit` to 0
+3. **Halt marketplace** — `setPlatformFee` to maximum to deter use, or pause via governance
+4. **Do NOT self-destruct** — contracts cannot be destroyed, only neutered via owner functions
+5. Contact Zenith Security for emergency response guidance
+
+---
+
+## Post-Launch Monitoring
+
+- Monitor `AgentRegistered` events on AgentIdentity
+- Monitor `ReputationUpdated` events for anomalous score changes
+- Monitor `Withdrawn` events on AgentVault for large withdrawals
+- Monitor `JobCreated` and `DisputeResolved` on AgentMarketplace
+- Set up Etherscan email alerts on all 8 contract addresses
+
+---
+
+*Aevum Protocol — github.com/AevumProtocol/contracts*
