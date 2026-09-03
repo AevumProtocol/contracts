@@ -1,213 +1,150 @@
 # Aevum Protocol — Mainnet Deployment Runbook
+
 **Status:** Active — September 4, 2026 mainnet launch.
+**Network:** Ethereum Mainnet
+**Deployer:** 0x7Ba97591b0D50D093c41aE2898f44b32d0A97769
 
 ## Contracts deploying September 4 (VBO Core only)
 
 | Contract | Description |
 |---|---|
-| AgentIdentity | Required by VBO for cert issuance |
+| AgentIdentity | Required by VBO for cert issuance and agent registration |
 | ReputationOracle v2 | Required by VBO for agent authorization |
 | ReputationController v2 | Required by VBO for reputation management |
 | VBO v2 (Atlas Oracle) | Hero product — issues certificates |
 
 ## Post-funding deploys (separate runbook)
-AEVToken, TokenVesting, AevumDAO, AgentVault, AgentMarketplace  
-**Target:** ETHOnline 2026 (September 4–16)  
+AEVToken, TokenVesting, AevumDAO, AgentVault, AgentMarketplace — do NOT deploy these on September 4.
 
 ---
 
-## Pre-Deployment Checklist
+## Pre-deployment checklist
 
-### Security
-- [ ] Internal security review complete (5 manual passes, 4 Slither passes, AuditAid findings fixed)
-- [ ] Final Slither pass on mainnet-targeted code — 0 HIGH/MEDIUM
-- [ ] Code4rena community audit period closed
-- [ ] All audit findings documented and responses written
-
-### Infrastructure
-- [ ] Gnosis Safe multisig deployed on Ethereum mainnet
-  - Recommended: 3-of-5 signers minimum
-  - Signers: founder + advisors (not same device)
-  - Safe address recorded before deployment begins
-- [ ] Mainnet Alchemy RPC endpoint configured
-- [ ] Etherscan mainnet API key ready
-- [ ] Deployer wallet funded (estimate: ~0.5 ETH for gas)
-- [ ] Hardware wallet connected (Ledger/Trezor recommended for mainnet)
-
-### Token
-- [ ] All 6 allocation wallet addresses confirmed with recipients
-- [ ] Vesting schedules agreed and documented
-- [ ] TokenVesting contract funded with team + investor allocations before cliff starts
+- [ ] Deployer wallet has at least 0.02 ETH on mainnet
+- [ ] Mainnet Alchemy RPC URL in .env as MAINNET_RPC_URL
+- [ ] Etherscan API key in .env as ETHERSCAN_API_KEY
+- [ ] Atlas API key in .env as ATLAS_API_KEY
+- [ ] Internal security review complete
 
 ---
 
-## Gas Estimates (Ethereum Mainnet)
+## Step 1 — Deploy contracts
 
-| Contract | Estimated Gas | @ 20 gwei | @ 50 gwei |
-|---|---|---|---|
-| AgentIdentity | ~800,000 | 0.016 ETH | 0.040 ETH |
-| AEVToken | ~2,500,000 | 0.050 ETH | 0.125 ETH |
-| ReputationOracle | ~600,000 | 0.012 ETH | 0.030 ETH |
-| AgentVault | ~700,000 | 0.014 ETH | 0.035 ETH |
-| AgentMarketplace | ~900,000 | 0.018 ETH | 0.045 ETH |
-| ReputationController | ~750,000 | 0.015 ETH | 0.038 ETH |
-| TokenVesting | ~650,000 | 0.013 ETH | 0.033 ETH |
-| AevumDAO | ~800,000 | 0.016 ETH | 0.040 ETH |
-| **Total** | **~7,700,000** | **~0.154 ETH** | **~0.386 ETH** |
+```bash
+npx hardhat run scripts/deployMainnet.js --network mainnet
+```
 
-**Recommendation:** Budget 0.5 ETH for deployment + post-deploy setup transactions.
+Save the output — you need all 4 addresses. They are also written to `mainnet-addresses.json`.
 
 ---
 
-## Deployment Steps
+## Step 2 — Wire the contracts
 
-### Step 1 — Deploy AgentIdentity
-```bash
-npx hardhat run scripts/deploy.js --network mainnet
-```
-Record address. Do NOT call `setReputationController` yet.
+This step is critical. Without it, every `revealAndAttest` call reverts.
 
-### Step 2 — Deploy AEVToken
 ```bash
-npx hardhat run scripts/deployToken.js --network mainnet
-```
-Provide all 6 real allocation wallet addresses (NOT deployer wallet).  
-**Verify immediately** — token supply is minted in constructor.
+# Set these from mainnet-addresses.json output
+AGENT_IDENTITY=0x...
+REPUTATION_ORACLE=0x...
+REPUTATION_CONTROLLER=0x...
+VBO_V2=0x...
 
-### Step 3 — Deploy ReputationOracle
-```bash
-npx hardhat run scripts/deployOracle.js --network mainnet
-```
-Constructor arg: AgentIdentity address from Step 1.
+node -e "
+require('dotenv').config();
+const { ethers } = require('ethers');
+const provider = new ethers.JsonRpcProvider(process.env.MAINNET_RPC_URL);
+const wallet = new ethers.Wallet(process.env.DEPLOYER_PRIVATE_KEY, provider);
 
-### Step 4 — Deploy AgentVault
-```bash
-npx hardhat run scripts/deployVault.js --network mainnet
-```
-Constructor args: ReputationOracle address, defaultWithdrawLimit (recommend: 0.1 ETH).
+async function wire() {
+  const agentIdentity = new ethers.Contract('${AGENT_IDENTITY}', [
+    'function setReputationController(address) external',
+    'function setApprovedCertIssuer(address, bool) external',
+    'function registerOracle(address) external',
+  ], wallet);
 
-### Step 5 — Deploy AgentMarketplace
-```bash
-npx hardhat run scripts/deployMarketplace.js --network mainnet
-```
-Constructor arg: ReputationOracle address.
+  // 1. Set ReputationController on AgentIdentity
+  await (await agentIdentity.setReputationController('${REPUTATION_CONTROLLER}')).wait();
+  console.log('✓ ReputationController set');
 
-### Step 6 — Deploy ReputationController
-```bash
-npx hardhat run scripts/deployReputationController.js --network mainnet
-```
-Constructor args: AgentIdentity address, oracle1 address, oracle2 address.  
-**Both oracle addresses must be real, distinct, non-zero addresses on mainnet.**
+  // 2. CRITICAL: Approve VBO as cert issuer -- without this revealAndAttest reverts
+  await (await agentIdentity.setApprovedCertIssuer('${VBO_V2}', true)).wait();
+  console.log('✓ VBO approved as cert issuer');
 
-### Step 7 — Deploy TokenVesting
-```bash
-npx hardhat run scripts/deployVesting.js --network mainnet
-```
-Constructor arg: AEVToken address.
+  // 3. Register ReputationOracle
+  await (await agentIdentity.registerOracle('${REPUTATION_ORACLE}')).wait();
+  console.log('✓ ReputationOracle registered');
 
-### Step 8 — Deploy AevumDAO
-```bash
-npx hardhat run scripts/deployDAO.js --network mainnet
+  // 4. Add deployer as attestor on VBO
+  const vbo = new ethers.Contract('${VBO_V2}', [
+    'function addAttestor(address) external',
+  ], wallet);
+  await (await vbo.addAttestor(wallet.address)).wait();
+  console.log('✓ Deployer added as attestor');
+}
+wire().catch(console.error);
+"
 ```
-Constructor args: AEVToken address, quorumVotes (10,000,000 × 10^18 minimum).
 
 ---
 
-## Post-Deployment Setup
+## Step 3 — Verify on Etherscan
 
-### Step 9 — Wire AgentIdentity to ReputationController
 ```bash
-# Call AgentIdentity.setReputationController(ReputationController.address)
+npx hardhat verify --network mainnet AGENT_IDENTITY_ADDRESS
+npx hardhat verify --network mainnet REPUTATION_ORACLE_ADDRESS AGENT_IDENTITY_ADDRESS
+npx hardhat verify --network mainnet REPUTATION_CONTROLLER_ADDRESS AGENT_IDENTITY_ADDRESS REPUTATION_ORACLE_ADDRESS
+npx hardhat verify --network mainnet VBO_V2_ADDRESS AGENT_IDENTITY_ADDRESS
 ```
-This is the critical wiring step. Until this is done, reputation updates will revert.
-
-### Step 10 — Transfer all ownership to Gnosis Safe
-```bash
-# Call transferOwnership(GNOSIS_SAFE_ADDRESS) on all 8 contracts
-# Order doesn't matter, but complete all 8 before announcing
-```
-Contracts to transfer:
-- AgentIdentity
-- ReputationOracle
-- AgentVault
-- AgentMarketplace
-- ReputationController
-- TokenVesting
-- AevumDAO
-- AEVToken (transfer last — verify Safe can call enableTransfers())
-
-### Step 11 — Approve DAO governance targets
-```bash
-# From Gnosis Safe:
-# AevumDAO.approveTarget(AgentIdentity.address, true)
-# AevumDAO.approveTarget(ReputationOracle.address, true)
-# AevumDAO.approveTarget(AgentVault.address, true)
-# AevumDAO.approveTarget(AgentMarketplace.address, true)
-# AevumDAO.approveTarget(ReputationController.address, true)
-# AevumDAO.approveTarget(AevumDAO.address, true)
-```
-
-### Step 12 — Register protocols in ReputationOracle
-```bash
-# From Gnosis Safe:
-# ReputationOracle.registerProtocol(AgentVault.address, 100)
-# ReputationOracle.registerProtocol(AgentMarketplace.address, 200)
-```
-
-### Step 13 — Fund TokenVesting contract
-Transfer team and investor AEV allocations to TokenVesting contract address before creating schedules.
-
-### Step 14 — Create vesting schedules
-```bash
-# TokenVesting.createSchedule(teamWallet, amount, cliff, duration, "Team")
-# TokenVesting.createSchedule(investorWallet, amount, cliff, duration, "Investors")
-```
-
-### Step 15 — Verify all 8 contracts on Etherscan
-```bash
-npx hardhat verify --network mainnet <address> <constructor args>
-```
-
-### Step 16 — Enable AEV token transfers
-```bash
-# From Gnosis Safe:
-# AEVToken.enableTransfers()
-```
-This is the TGE moment. Do not call until all other steps are complete.
 
 ---
 
-## Admin Role Structure (Mainnet)
+## Step 4 — Smoke test
 
-| Role | Held By | Actions |
-|---|---|---|
-| Contract owner (all 8) | Gnosis Safe multisig | All admin functions |
-| ReputationController oracle 1 | Founder wallet (hardware wallet) | Propose/approve reputation updates |
-| ReputationController oracle 2 | Trusted advisor wallet | Approve reputation updates |
-| AEV fee collector | Gnosis Safe | Receives fee collector share |
-
----
-
-## Rollback Plan
-
-If a critical issue is discovered post-deployment:
-
-1. **Pause AEVToken** — `pauseTransfers()` from Gnosis Safe
-2. **Disable vault withdrawals** — `blacklistAgent` on all agents or set `defaultWithdrawLimit` to 0
-3. **Halt marketplace** — `setPlatformFee` to maximum to deter use, or pause via governance
-4. **Do NOT self-destruct** — contracts cannot be destroyed, only neutered via owner functions
-5. Contact Hexens for emergency response guidance
+1. Register an agent on AgentIdentity via frontend
+2. Go to app.aevumprotocol.io/vbo
+3. Use promo code ALGOCHAINS2026
+4. Commit a strategy — confirm MetaMask pops up and tx confirms
+5. Check leaderboard — commitment appears with countdown
+6. Confirm confirmation email arrives at attestation@aevumprotocol.io
 
 ---
 
-## Post-Launch Monitoring
+## Step 5 — Update frontend to mainnet
 
-- Monitor `AgentRegistered` events on AgentIdentity
-- Monitor `ReputationUpdated` events for anomalous score changes
-- Monitor `Withdrawn` events on AgentVault for large withdrawals
-- Monitor `JobCreated` and `DisputeResolved` on AgentMarketplace
-- Set up Etherscan email alerts on all 8 contract addresses
+Update `src/contracts.js` with mainnet addresses:
+- Change `SEPOLIA_CHAIN_ID` to `MAINNET_CHAIN_ID = 1`
+- Update all contract addresses
+- Change `ALCHEMY_RPC` to mainnet URL
+- Change `ETHERSCAN_BASE` to `https://etherscan.io`
+- Remove SEPOLIA badge — replace with MAINNET
+
+```bash
+cd ~/Desktop/aevum_social_bot/aevum-frontend && vercel --prod
+```
 
 ---
 
-*Aevum Protocol — github.com/AevumProtocol/contracts*
+## Step 6 — Send launch announcement
+
+```bash
+cd ~/Desktop/aevum_social_bot/aevum-contracts
+node scripts/sendLaunchAnnouncement.js
+# Type SEND to confirm
+```
+
+---
+
+## Emergency procedures
+
+**Pause all withdrawals:** `vbo.setWithdrawPaused(true)` (owner only)
+**Revoke a certificate:** `vbo.revokeCertificate(certId, reason)` (owner only)
+**Transfer ownership:** `vbo.transferOwnership(newOwner)` then `newOwner.acceptOwnership()` (two-step)
+
+---
+
+## Security notes
+
+- All contracts owned by deployer EOA at launch. Gnosis Safe migration within 30 days.
+- Atlas Oracle signer is hardcoded. Key rotation requires contract upgrade.
+- No third-party audit completed. Hexens audit restarts at first investment close.
+- Known limitations: github.com/AevumProtocol/contracts/blob/main/KNOWN_LIMITATIONS.md
