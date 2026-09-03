@@ -22,6 +22,7 @@ const EMAILS = [
   'rdyktrade.1@gmail.com',
   'carlin.bryan25@gmail.com',
   'luisolvs@icloud.com',
+  'wilson656abella920@gmail.com',
 ];
 
 const html = `<!DOCTYPE html>
@@ -137,6 +138,11 @@ const html = `<!DOCTYPE html>
 
   </table>
 </td></tr>
+  <tr><td style="padding:24px 0;border-top:1px solid #1a1f2e;border-bottom:1px solid #1a1f2e;margin:16px 0;">
+    <div style="font-size:11px;color:#555f6e;text-transform:uppercase;letter-spacing:0.14em;margin-bottom:12px;">From the Founder</div>
+    <p style="margin:0;font-size:14px;color:#9ca3af;line-height:1.85;">We built Aevum because trust in trading performance is broken. Anyone can show a great backtest and no one could prove it wasn't cherry-picked. VBO changes that. Every certificate we issue is proof that a strategy ran honestly, with prices verified on-chain by Atlas Oracle. That's the standard we're setting.</p>
+    <div style="margin-top:12px;font-size:12px;color:#6b7280;">— Jonathan Quintero, Founder &amp; CEO, Aevum Protocol</div>
+  </td></tr>
 </table>
 </body></html>`;
 
