@@ -21,7 +21,7 @@ const DETAILS = {
   windowEnd: "September 3, 2026",
   exchange: "Coinbase",
   txHash: "0x2abad89aa06b80d16b796a03446a9276d9e07bb98f83bbfbe461b7ac5667bf28",
-  etherscanBase: "https://sepolia.etherscan.io",
+  etherscanBase: "https://etherscan.io",
 };
 // ──────────────────────────────────────────────────────────────────────────────
 
