@@ -15,6 +15,8 @@
 require('dotenv').config();
 const { ethers } = require("hardhat");
 
+const delay = ms => new Promise(r => setTimeout(r, ms));
+
 async function main() {
   const [deployer] = await ethers.getSigners();
   const balance = await ethers.provider.getBalance(deployer.address);
@@ -27,8 +29,8 @@ async function main() {
   console.log("Network:", (await ethers.provider.getNetwork()).name);
   console.log("═══════════════════════════════════════════════\n");
 
-  if (ethers.formatEther(balance) < 0.02) {
-    throw new Error("Insufficient ETH — need at least 0.02 ETH for gas");
+  if (ethers.formatEther(balance) < 0.01) {
+    throw new Error("Insufficient ETH — need at least 0.01 ETH for gas");
   }
 
   const addresses = {};
@@ -40,6 +42,7 @@ async function main() {
   await agentIdentity.waitForDeployment();
   addresses.AgentIdentity = await agentIdentity.getAddress();
   console.log("   ✓ AgentIdentity:", addresses.AgentIdentity);
+  await delay(5000); // wait for tx to confirm
 
   // ── 2. ReputationOracle v2 ───────────────────────────────────────────────────
   console.log("2/4 Deploying ReputationOracle v2...");
@@ -48,17 +51,22 @@ async function main() {
   await reputationOracle.waitForDeployment();
   addresses.ReputationOracle = await reputationOracle.getAddress();
   console.log("   ✓ ReputationOracle v2:", addresses.ReputationOracle);
+  await delay(5000);
 
   // ── 3. ReputationController v2 ───────────────────────────────────────────────
   console.log("3/4 Deploying ReputationController v2...");
   const ReputationController = await ethers.getContractFactory("ReputationController");
+  // ReputationController requires 2 distinct oracle addresses for bootstrap
+  // Using deployer as oracle1 and ReputationOracle contract as oracle2
   const reputationController = await ReputationController.deploy(
     addresses.AgentIdentity,
+    deployer.address,
     addresses.ReputationOracle
   );
   await reputationController.waitForDeployment();
   addresses.ReputationController = await reputationController.getAddress();
   console.log("   ✓ ReputationController v2:", addresses.ReputationController);
+  await delay(5000);
 
   // ── 4. VBO v2 (Atlas Oracle pull mode) ──────────────────────────────────────
   console.log("4/4 Deploying VBO v2 with Atlas Oracle...");
@@ -67,6 +75,7 @@ async function main() {
   await vbo.waitForDeployment();
   addresses.VBO = await vbo.getAddress();
   console.log("   ✓ VBO v2:", addresses.VBO);
+  await delay(5000);
 
   // ── Setup ────────────────────────────────────────────────────────────────────
   console.log("\nConfiguring contracts...");
@@ -74,14 +83,12 @@ async function main() {
   // Set ReputationController on AgentIdentity
   await (await agentIdentity.setReputationController(addresses.ReputationController)).wait();
   console.log("   ✓ ReputationController set on AgentIdentity");
+  await delay(5000);
 
   // Approve VBO as cert issuer on AgentIdentity
   await (await agentIdentity.setApprovedCertIssuer(addresses.VBO, true)).wait();
   console.log("   ✓ VBO approved as cert issuer on AgentIdentity");
 
-  // Register ReputationOracle with AgentIdentity
-  await (await agentIdentity.registerOracle(addresses.ReputationOracle)).wait();
-  console.log("   ✓ ReputationOracle registered on AgentIdentity");
 
   // ── Gas report ───────────────────────────────────────────────────────────────
   const finalBalance = await ethers.provider.getBalance(deployer.address);
