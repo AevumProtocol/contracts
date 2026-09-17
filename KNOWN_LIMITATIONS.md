@@ -154,3 +154,8 @@ All deployed contracts are owned by a single EOA deployer wallet. This is a cent
 **Current risk level:** Acceptable for testnet and early mainnet with low TVL. Not acceptable at scale.
 
 **Timeline:** Transfer to Gnosis Safe within 30 days of mainnet launch.
+
+### 22. Atlas Oracle single-signer dependency (VBO v2)
+VBOv2 hardcodes a single Atlas Oracle signer address (`ATLAS_SIGNER`) as an immutable constant, with no fallback provider, no multi-source quorum, and no dispute mechanism if Atlas rotates its signing key or experiences downtime. If the Atlas signer key changes without a corresponding contract update, VBO certificate attestation halts entirely until a new VBO version is deployed. This is a distinct single point of failure from the reputation oracle centralization already documented in #11/#18 — Atlas prices certificates, the reputation oracle scores agents.
+
+Flagged by Kumar Rajvardhan (architecture review, September 2026) as a general oracle resilience gap. V2 mitigation: monitor Atlas signer key status operationally, define a manual pause/fallback path if attestation fails, and evaluate multi-source price verification for V3 if Atlas key rotation risk proves material in practice.

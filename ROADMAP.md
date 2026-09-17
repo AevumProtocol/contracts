@@ -63,6 +63,20 @@ endpoint operators: **evidence belongs on-chain, scoring belongs off-chain.**
 - [ ] Short-notice revoke functions on all approvals
 - [ ] ERC20 token support (currently ETH-only)
 
+### Agent Execution & Lifecycle (informed by Kumar Rajvardhan review, Sept 2026)
+- [ ] Execution attestation layer — link committed VBO strategy to actual production
+      agent execution, closing the gap between "strategy was evaluated" and
+      "agent executed according to that strategy"
+- [ ] Agent provenance & versioning — track model, prompt, strategy, and risk
+      parameter changes over an agent's lifetime, distinct from static AgentIdentity
+- [ ] Signed decision envelopes — bridge off-chain agent reasoning to on-chain
+      execution without exposing full reasoning on-chain, extending PolicyGate's
+      approval-issuing pattern
+- [ ] Broader agent failure/recovery modes — explicit failure states, capability
+      revocation, and recovery paths for bad data, infinite loops, lost connectivity,
+      or compromised tools (extends the oracle operator fail-safe pattern in
+      KNOWN_LIMITATIONS #14 to general agent operation)
+
 ### PolicyGate (see POLICYGATE_V2.md)
 - [ ] Lightweight on-chain gate issuing signed approvals for off-chain agent
       actions (refunds, API calls, CRM updates) — extends Aevum's addressable
