@@ -2,9 +2,20 @@
 
 On-chain infrastructure for certifying trading strategy integrity. The Verifiable Backtest Oracle (VBO) issues cryptographic certificates proving a trading strategy was defined before its forward test window — making look-ahead bias and cherry-picking cryptographically impossible.
 
-## Deployed Contracts — Ethereum Sepolia Testnet
+## Live on Ethereum Mainnet (deployed September 3, 2026)
 
-### VBO Core (Mainnet launch: September 4, 2026)
+| Contract | Address |
+|---|---|
+| VBO v2 (Atlas Oracle) | [`0xEd3309a515CA607c4687f096D6E60E639e03D793`](https://etherscan.io/address/0xEd3309a515CA607c4687f096D6E60E639e03D793) |
+| AgentIdentity | [`0x86D741407E2Df0400AbE2BB8E8E5075BA10E409d`](https://etherscan.io/address/0x86D741407E2Df0400AbE2BB8E8E5075BA10E409d) |
+| ReputationOracle v2 | [`0x9dBC2f11E11C64810922B4c68d55DFf1BCA4Dc8d`](https://etherscan.io/address/0x9dBC2f11E11C64810922B4c68d55DFf1BCA4Dc8d) |
+| ReputationController v2 | [`0xc8C61235eAe5368F7Ed250897937bc65Dd595308`](https://etherscan.io/address/0xc8C61235eAe5368F7Ed250897937bc65Dd595308) |
+
+Canonical list: `mainnet-addresses.json`. Note: some addresses are reused across networks for different contracts (same deployer and nonce) — always check which network you are on.
+
+## Ethereum Sepolia Testnet
+
+### VBO Core (testnet)
 
 | Contract | Address | Description |
 |---|---|---|
