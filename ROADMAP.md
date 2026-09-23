@@ -5,16 +5,17 @@ direction informed by operator and integrator feedback during the v1 audit cycle
 
 ---
 
-## Phase 0 — Current (Q3 2026)
+## Phase 0 — Foundation (complete, Q3 2026)
 
-- [x] 8 core contracts deployed and verified on Ethereum Sepolia
-- [x] Internal pre-audit hardening (5 manual reviews, 4 Slither passes, 1 deep static analysis)
-- [x] Live demo frontend — aevum-frontend.vercel.app
-- [x] Technical documentation, known limitations, mainnet runbook published
-- [ ] Hexens professional audit (contracted, Kasper Zwijsen Head of Audits — audited EigenLayer, Lido, LayerZero — restarts at first investment check)
-- [ ] Audit findings remediation + mitigation review
+- [x] Core contracts built, tested and verified on Ethereum Sepolia
+- [x] Internal pre-audit hardening (manual reviews, Slither passes, static analysis)
+- [x] Technical documentation, known limitations and mainnet runbook written
+- [x] Atlas Oracle (CoinMarketCap) 12-month data partnership signed; BTC/USD pull feed integrated
+- [x] Certificates #001 and #002 issued on Sepolia (founder's BTC bot)
 
-## Deployed — Ethereum Sepolia (Live)
+## Testnet — Ethereum Sepolia
+
+*Full contract suite on Sepolia. The four VBO-required contracts are also live on mainnet (see Phase 1 and `mainnet-addresses.json`); the rest deploy to mainnet post-funding.*
 
 - [x] **Agent Identity Layer** — on-chain identity for AI agents. Reputation scoring, execution policies, performance certificates. Contract: `0xF6CEc60C9dD6aa283D42fE5D38537303F9bE231B`
 - [x] **Verifiable Backtest Oracle (VBO)** — cryptographic proof that a trading strategy was defined before its forward test window. Atlas Oracle pull mode integration. Contract: `0x9dBC2f11E11C64810922B4c68d55DFf1BCA4Dc8d`
@@ -26,13 +27,21 @@ direction informed by operator and integrator feedback during the v1 audit cycle
 - [x] **AevumDAO** — governance. Contract: `0x11205fdFC73Bc7527C2fDc68E7369fcC1f6144dD`
 - [x] **VBO v2 with Atlas Oracle** — Atlas PullOracleConsumerStandard inheritance, on-chain price verification. Contract: `0xEfFa92f77424d733b0f0FFD03caF98D01583cd05`
 
-## Phase 1 — Mainnet (ETHOnline 2026, September 4–16)
+## Phase 1 — Mainnet (live since September 3, 2026)
 
-- [ ] Gnosis Safe 2-of-3 multisig ownership (replaces single deployer EOA)
-- [ ] Hardware wallet signer integration
-- [ ] Mainnet deployment per MAINNET_RUNBOOK.md
-- [ ] Etherscan verification of all mainnet contracts
-- [ ] Wallet connection upgrade — RainbowKit + WalletConnect (removes MetaMask/Chrome dependency)
+- [x] Mainnet deployment of the four VBO-required contracts (VBO v2 with Atlas Oracle, AgentIdentity, ReputationOracle, ReputationController), all verified on Etherscan
+- [x] Atlas Oracle price verification live in mainnet commitments
+- [x] First mainnet strategy commitment (September 11, 2026)
+- [x] Contract ownership moved to a new owner after the September 2026 security incident
+- [x] Gnosis Safe 2-of-3 multisig deployed on mainnet
+- [x] Subgraph indexing mainnet
+- [x] ETHOnline 2026 — top 20% (live judging September 14)
+- [ ] Transfer contract ownership to the Gnosis Safe (pending hardware wallet signer)
+- [ ] First mainnet certificate
+- [ ] Hexens professional audit — selected auditor; audit begins at first investment close
+- [ ] Audit findings remediation + mitigation review
+- [ ] Wallet connection upgrade — Coinbase Wallet SDK (replaces WalletConnect)
+- [ ] Founding 25 — first 25 strategies verified on mainnet
 
 ## Phase 2 — v2 Architecture (Post-Audit)
 
@@ -183,21 +192,16 @@ Commit a fingerprint of a published research report plus measurable criteria bef
 
 **Messaging note:** despite the name, the VBO scores only forward, post-commitment data — describe it as "forward-only live verification." The name stays Verifiable Backtest Oracle.
 
-## Post-ETHOnline — Phase 3 Additions
+## Products
 
-### AVA — Aevum Virtual Assistant
+### AVA — Aevum Virtual Assistant (retail product)
 
-A custom AI coding assistant built on the Claude API, pre-loaded with permanent context:
-- All 9 contract ABIs
-- TECHNICAL_DOCS.md
-- KNOWN_LIMITATIONS.md
-- ROADMAP.md
+Done-for-you crypto trading bots for non-technical users. AVA builds, hosts and runs the bot; the customer controls it from their phone and their funds never leave their own Coinbase account.
 
-**Deployed at:** `assistant.aevumprotocol.io`
-
-**Goals:**
-- Reduce Claude usage costs for development sessions
-- Onboard new team members instantly without reading 10,000 lines of documentation
-- Give BD partners (Adam, AlgoChains, investors) a way to answer technical questions without developer involvement
-
-**Timeline:** Build after ETHOnline September 4th when first funding check closes.
+- **Live:** waitlist at https://ava.aevumprotocol.io (September 2026)
+- **Pairs:** BTC-USD, ETH-USD, SOL-USD on Coinbase
+- **Onboarding:** Coinbase OAuth only ("Connect with Coinbase"), no API keys, no withdrawal scopes. OAuth partner application submitted to Coinbase September 22, 2026.
+- **Tiers:** Basic $199 + $19/mo · Pro $499 + $39/mo · AI $999 + $79/mo
+- **VBO tie-in:** Bitcoin bots receive a free VBO certificate; ETH and SOL certificates follow once Atlas confirms those feeds. Every AVA bot adds certificate volume to the protocol.
+- **Next:** Supabase backend (customers, encrypted OAuth tokens, bots, trades), backend-owned token refresh, bot switch to OAuth, Stripe billing, phone dashboard.
+- **Launch:** Q4 2026, pending Coinbase OAuth approval.
