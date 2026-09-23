@@ -156,6 +156,33 @@ $AEV holders vote on pricing and access tiers. Institutions pay $AEV to access p
 
 **Timeline:** v2 research item. Launch as a separate product alongside the core protocol.
 
+
+## VBO Product Expansion — Demand-Gated (added Sept 23, 2026)
+
+*These extend the VBO beyond coded strategies. None ship until real users ask for them; each has an explicit build trigger. Sell mode rule applies: build only what gets a customer.*
+
+### 1. Live track-record anchoring (for traders who don't backtest)
+Periodically (daily/weekly) commit a fingerprint of a trader's live trade history to Ethereum, so the record cannot be edited, backdated or cherry-picked from that point forward.
+- **Strong version:** trade data pulled directly from the exchange via a read-only connection (reuses AVA's Coinbase OAuth work), so the record is provably real, not just unchanged. Crypto-first.
+- **Limitation of the basic version:** fingerprinting a statement proves it wasn't changed later, not that it came from a real account.
+- **Origin:** live-only algo traders (e.g. "I don't do backtests, I have a live track record").
+- **Build trigger:** 3+ serious traders confirm proving their live record is a real pain.
+
+### 2. Trade-call commitment flow (discretionary traders)
+Commit individual trade plans (direction, entry, stop, target) before execution; verify outcomes against market prices afterward. Currently done manually via the VBO page — productize if discretionary Founding 25 partners find it valuable.
+- **Build trigger:** Founding 25 discretionary traders complete windows and ask to keep using it.
+
+### 3. Research / prediction report commitment
+Commit a fingerprint of a published research report plus measurable criteria before the forecast period; validate at period end. First case: MarketVU ETH stock-cycle report (Sept 2026).
+- **Build trigger:** a research publisher wants every report auto-committed (platform integration).
+
+### 4. Additional price feeds
+- ETH/USD, SOL/USD — pending Atlas Oracle confirmation of mainnet pull feeds (only BTC/USD Feed #626 confirmed).
+- FX (EUR/USD, GBP/USD) and gold (XAU/USD) + MT4/MT5 data bridge — **deferred** (crypto-only decision, Sept 22, 2026).
+- **Build trigger:** Atlas (or another partner) confirms the feeds AND 3+ traders or a prop firm ask for them.
+
+**Messaging note:** despite the name, the VBO scores only forward, post-commitment data — describe it as "forward-only live verification." The name stays Verifiable Backtest Oracle.
+
 ## Post-ETHOnline — Phase 3 Additions
 
 ### AVA — Aevum Virtual Assistant
