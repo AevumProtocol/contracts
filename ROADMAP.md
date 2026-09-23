@@ -11,6 +11,7 @@ direction informed by operator and integrator feedback during the v1 audit cycle
 - [x] Internal pre-audit hardening (manual reviews, Slither passes, static analysis)
 - [x] Technical documentation, known limitations and mainnet runbook written
 - [x] Atlas Oracle (CoinMarketCap) 12-month data partnership signed; BTC/USD pull feed integrated
+- [ ] Atlas ETH/USD (#852) and SOL/USD (#635) pull feeds integrated into VBO (feeds confirmed Sept 2026)
 - [x] Certificates #001 and #002 issued on Sepolia (founder's BTC bot)
 
 ## Testnet — Ethereum Sepolia
@@ -186,9 +187,9 @@ Commit a fingerprint of a published research report plus measurable criteria bef
 - **Build trigger:** a research publisher wants every report auto-committed (platform integration).
 
 ### 4. Additional price feeds
-- ETH/USD, SOL/USD — pending Atlas Oracle confirmation of mainnet pull feeds (only BTC/USD Feed #626 confirmed).
+- ETH/USD (Atlas Feed #852), SOL/USD (Atlas Feed #635) — confirmed available on Ethereum mainnet as pull feeds (Sept 2026). **Now in progress:** wiring both feeds into VBO commitment and attestation, then Sepolia and mainnet tests. AVA Ethereum and Solana bot certificates go live when this ships.
 - FX (EUR/USD, GBP/USD) and gold (XAU/USD) + MT4/MT5 data bridge — **deferred** (crypto-only decision, Sept 22, 2026).
-- **Build trigger:** Atlas (or another partner) confirms the feeds AND 3+ traders or a prop firm ask for them.
+- **Build trigger (FX/XAU):** Atlas (or another partner) confirms the feeds AND 3+ traders or a prop firm ask for them.
 
 **Messaging note:** despite the name, the VBO scores only forward, post-commitment data — describe it as "forward-only live verification." The name stays Verifiable Backtest Oracle.
 
