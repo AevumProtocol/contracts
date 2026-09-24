@@ -187,7 +187,7 @@ Commit a fingerprint of a published research report plus measurable criteria bef
 - **Build trigger:** a research publisher wants every report auto-committed (platform integration).
 
 ### 4. Additional price feeds
-- ETH/USD (Atlas Feed #852), SOL/USD (Atlas Feed #635) — confirmed available on Ethereum mainnet as pull feeds (Sept 2026). **Now in progress:** wiring both feeds into VBO commitment and attestation, then Sepolia and mainnet tests. AVA Ethereum and Solana bot certificates go live when this ships.
+- ETH/USD (Atlas Feed #852), SOL/USD (Atlas Feed #635) — confirmed available on Ethereum mainnet as pull feeds (Sept 2026). **Next:** VBO v3 with per-commitment feed selection (VBO v2 verifies BTC/USD only), then Sepolia tests, security review and mainnet deployment. AVA Ethereum and Solana bot certificates go live when this ships.
 - FX (EUR/USD, GBP/USD) and gold (XAU/USD) + MT4/MT5 data bridge — **deferred** (crypto-only decision, Sept 22, 2026).
 - **Build trigger (FX/XAU):** Atlas (or another partner) confirms the feeds AND 3+ traders or a prop firm ask for them.
 
