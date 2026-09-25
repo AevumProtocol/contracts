@@ -188,6 +188,11 @@ Commit a fingerprint of a published research report plus measurable criteria bef
 
 ### 4. Additional price feeds
 - ETH/USD (Atlas Feed #852), SOL/USD (Atlas Feed #635) — confirmed available on Ethereum mainnet as pull feeds (Sept 2026). **Next:** VBO v3 with per-commitment feed selection (VBO v2 verifies BTC/USD only), then Sepolia tests, security review and mainnet deployment. AVA Ethereum and Solana bot certificates go live when this ships.
+- **VBO v3 design notes (anti-sybil / anti-cherry-picking, from Matthew Haney review, Sept 24 2026):**
+  - Bond scales with the number of *open* commitments per identity (spreading 500 strategies = locking 500 growing bonds).
+  - Weight track records by **bonded time** (duration capital was at risk), not commitment count.
+  - Add `removeAttestor` (v2 cannot remove the old deployer 0x7Ba9 as attestor).
+  - Contracts can't prove two wallets are one person; goal is to make splitting expensive and visible.
 - FX (EUR/USD, GBP/USD) and gold (XAU/USD) + MT4/MT5 data bridge — **deferred** (crypto-only decision, Sept 22, 2026).
 - **Build trigger (FX/XAU):** Atlas (or another partner) confirms the feeds AND 3+ traders or a prop firm ask for them.
 
